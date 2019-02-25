@@ -25,8 +25,14 @@ As part of the call with the end user the Service Desk Operator could configure 
 Through everyday use of this tool as part of end-user interactions by the Service Desk Operators and Cyber Security Officers, the Security Posture of end users calling the Service Desk or those who are being flagged with Risk Events can be improved. 
 Continuous improvement of end user security posture will also improve the Azure Security Score for the organisation enforcing and aligning with the configuration implemented by the Security Administrators. 
 
+# Setup Requirements
+To get and utilise the full functionality of this project you will need an environment that has;
+* Active Directory
+* Azure Active Directory (synchronised from Active Directory with Azure AD Connect)
+* Users enrolled for Azure MFA
+* Azure Self Service Password Reset
+* Azure App Service for an Azure WebApp and Azure Functions
 
-# Setup Process
 ## 1. Azure AD Application
 Using the Azure Portal and the Azure Active Directory Blade register an application. The application will require the following permissions;
 * AuditLog.Read.All
