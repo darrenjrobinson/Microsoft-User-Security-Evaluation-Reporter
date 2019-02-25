@@ -1,11 +1,11 @@
 # Microsoft-User-Security-Evaulation-Reporter
 Evaluating and Reporting on Azure Active Directory/Active Directory Users Security Posture
 
-##Problem
+## Problem
 A Security Administrator within an Organisation enables security related configuration options on an Azure Tenant to implement security controls that align an organisation with Microsoft recommendations and best practice. 
 The Azure Security Score provides an evaluation on the alignment of an organisation with best practice, however to some extent it still requires end users to have the right configuration for security related elements of their profile. But as a Service Desk Operator or Cyber Security Officer there isn’t a single view of a user’s security posture that can give you an individual user security score summary.
 
-##Introduction
+## Introduction
 Microsoft User Security Evaluation Reporter (USER) is an Azure AD and Active Directory tool for use by the Service Desk and Cyber Security Officers to get instant visibility of an organisations Azure Security Score that allows them to then evaluate current risks within an organisation right down to individual users.
 When the Azure WebApp loads the current Azure Security Score is retrieved, evaluated and displayed for alignment with Microsoft Recommendations. Also, on load the last 5 Active Security Risk Events are displayed. 
 The Service Desk Operator or Cyber Security Officer can select one of the recent Security Events and drill down further into the associated identity. They will be quickly able to understand the users’ individual security posture aligned with best practice. 
@@ -16,12 +16,12 @@ What are the recent Security Risk Events for that user? Does that user;
 *	What are the last 10 logins for that user? 
 *	What is the base user information for that user and what devices are registered to that user? Is the device Azure AD Joined?
 Guidance is given for the retrieved user based on the configuration of the security options or risks associated with their profile. 
-###Service Desk Operator
+### Service Desk Operator
 Likewise, any user in the environment can be searched for and returned. When a Service Desk Operator receives a call for a user they can use Microsoft USER to search for and retrieve that user. 
 Does the user have multiple accounts (Hybrid (AD and Azure AD), Cloud Only and/or B2B)? What is the users recent activity? 
 As part of the call with the end user the Service Desk Operator could configure the users AD/AAD account to require a password change on next logon if their password has been Pwned. They can advise and talk the user through changing their primary MFA method to use an Authenticator App over SMS. They can see if the user has been having problems using Azure Password Reset and why that maybe failing (e.g fuzzy password violation). They can also review the recent logons for the user and if the user’s Windows Desktop isn’t Azure AD Joined they can talk the user through doing that. 
 
-##Summary
+## Summary
 Through everyday use of this tool as part of end-user interactions by the Service Desk Operators and Cyber Security Officers, the Security Posture of end users calling the Service Desk or those who are being flagged with Risk Events can be improved. 
 Continuous improvement of end user security posture will also improve the Azure Security Score for the organisation enforcing and aligning with the configuration implemented by the Security Administrators. 
 
