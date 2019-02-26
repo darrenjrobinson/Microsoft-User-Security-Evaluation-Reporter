@@ -57,9 +57,17 @@ The modification allows the automation of the regeneration of oAuth Tokens from 
 This Function isn't actively called but can be used as a test function for MS Graph Queries
 A folder under this function named Tokens is required. It contains token artifacts for the registered AzureAD App that allows regeneration of JWT oAuthv2 tokens. Note: The Access Token and Refresh Token is not stored in this folder, but in the Azure KeyVault. See Authentication Tokens below for generating Tokens for the Web App. 
 
+Update the following lines with your AppID and AppSecret
+$graphAppCredPwd = ConvertTo-SecureString "yourAppSecret" -AsPlainText -Force
+$graphAppCreds = New-Object System.Management.Automation.PSCredential ("yourAppID", $graphAppCredPwd)
+
 ### MSUser-Batch
 This Function is called when looking up a user from the WebApp to return information from Micrsofot Graph. It utilises Microsoft Graph JSON Batching 
 * Detailed post on JSON Batching (Batching Microsoft Graph API Requests with JSON Batching and PowerShell) https://blog.darrenjrobinson.com/batching-microsoft-graph-api-requests-with-json-batching-and-powershell/
+
+Update the following lines with your AppID and AppSecret
+$graphAppCredPwd = ConvertTo-SecureString "yourAppSecret" -AsPlainText -Force
+$graphAppCreds = New-Object System.Management.Automation.PSCredential ("yourAppID", $graphAppCredPwd)
 
 ### MSUser-MFA
 This Function is called to retrieve a users MFA settings. As user MFA settings are not currently avaialble via Microsoft Graph the information is exported from Azure Active Directory using the MSOnline PowerShell Module and put into Azure Table Service. The MSUser-MFA Function queries the Azure Table Service for the users MFA settings. The Azure Storage Connection information is stored in Azure Key Vault. Update the MSUser-MFA Function to provide the path to the Key Vault for your Storage Key and Storage Account Name. See Azure Key Vault section below for creating these entries.
@@ -89,11 +97,23 @@ This Function is a demo function to simulate the return of a users password stat
 ### MSUser-RiskEvents
 This Function is called on page load to return the 5 most recent Risk Events that are flagged as Active and display them in the app. 
 
+Update the following lines with your AppID and AppSecret
+$graphAppCredPwd = ConvertTo-SecureString "yourAppSecret" -AsPlainText -Force
+$graphAppCreds = New-Object System.Management.Automation.PSCredential ("yourAppID", $graphAppCredPwd)
+
 ### MSUser-SearchUsers
 This Function is called when using the Find User search facility in the WebApp. It returns a table of users where the name entered matches the DisplayName attribute in Azure AD.
 
+Update the following lines with your AppID and AppSecret
+$graphAppCredPwd = ConvertTo-SecureString "yourAppSecret" -AsPlainText -Force
+$graphAppCreds = New-Object System.Management.Automation.PSCredential ("yourAppID", $graphAppCredPwd)
+
 ### MSUser-SecureScore
 This Function is called on page load to return the Azure Secure Score and display it in the app. 
+
+Update the following lines with your AppID and AppSecret
+$graphAppCredPwd = ConvertTo-SecureString "yourAppSecret" -AsPlainText -Force
+$graphAppCreds = New-Object System.Management.Automation.PSCredential ("yourAppID", $graphAppCredPwd)
 
 ## 3. Azure Key Vault
 The Azure Key Vault is used for secrets associated with the MS User App.
