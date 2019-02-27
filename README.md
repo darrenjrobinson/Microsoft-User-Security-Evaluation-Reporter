@@ -1,6 +1,9 @@
 # Microsoft-User-Security-Evaulation-Reporter
 Evaluating and Reporting on Azure Active Directory/Active Directory Users Security Posture
-(Solution Demo) https://youtu.be/pnoA957DRqM
+
+[Solution Demo](https://youtu.be/pnoA957DRqM)
+
+[Devpost Solution](https://devpost.com/software/microsoft-user-security-evaluation-reporter)
 
 ## Problem
 A Security Administrator within an Organisation enables security related configuration options on an Azure Tenant to implement security controls that align an organisation with Microsoft recommendations and best practice. 
