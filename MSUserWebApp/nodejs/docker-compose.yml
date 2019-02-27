@@ -1,0 +1,10 @@
+version: '2.1'
+
+services:
+  nodejs:
+    image: nodejs
+    build: .
+    environment:
+      NODE_ENV: production
+    ports:
+      - 7071:7071

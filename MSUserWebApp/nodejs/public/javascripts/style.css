@@ -1,0 +1,268 @@
+.nav,
+.pagination,
+.carousel,
+.panel-title a {
+    cursor: pointer;
+}
+
+#activeCmdPanel {
+    clear: left;
+    border: 1px solid;
+    display: inline-block;
+    margin-top: 0.5em;
+    margin-bottom: 0.5em;
+    padding-top: 0.5em;
+    padding-left: 0.5em;
+    padding-right: 0.5em;
+    padding-bottom: 0.5em;
+}
+
+.blink {
+    animation: blink 2s steps(5, start) infinite;
+    -webkit-animation: blink 1s steps(5, start) infinite;
+}
+
+@keyframes blink {
+    to {
+        visibility: hidden;
+    }
+}
+
+@-webkit-keyframes blink {
+    to {
+        visibility: hidden;
+    }
+}
+
+body {
+    font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif;
+    font-size: 14px;
+    font-style: normal;
+    background-color: white;
+    padding-left: 3.0em;
+    padding-right: 3.0em;
+}
+
+.btn {
+    font-size: 12px;
+}
+
+#cmdSelectorPanel {
+    clear: left;
+    background-color: #EBEBE6;
+    border: 1px solid;
+    display: inline-block;
+    padding-top: 0.5em;
+    padding-left: 0.5em;
+    padding-right: 0.5em;
+    padding-bottom: 0.5em;
+}
+
+
+.commandPanel {
+    display: inline-block;
+    width: 700px;
+    font-weight: bold;
+    background-color: #C4CDC1;
+}
+
+.commandInfoPanel {
+    display: inline-block;
+    width: 700px;
+    font-weight: bold;
+    margin-top: 0.5em;
+    margin-bottom: 0.5em;
+    background-color: #C4CDC1;
+}
+
+.commandBlock {
+    border: 2px solid;
+    border-radius: 25px;
+    padding-left: 2em;
+    padding-top: 1em;
+    padding-right: 2em;
+    padding-bottom: 1em;
+    float: left;
+    clear: both;
+}
+
+.cmdTitle {
+    padding-top: 0.2em;
+    padding-bottom: 0.2em;
+    color: #85794D;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+.cmdCommand {
+    padding-top: 0.2em;
+    padding-bottom: 0.5em;
+    font-size: 14px;
+    font-style: italic;
+}
+
+.cmdReturn {
+    padding-top: 0.2em;
+    padding-bottom: 0.5em;
+    font-size: 14px;
+    font-style: normal;
+}
+
+.fa-arrow-alt-circle-right {
+    padding: 0em
+}
+
+.fa-square {
+    color: coral;
+}
+
+.fa-star {
+    color: limegreen;
+}
+
+.fa-star-half {
+    color: limegreen;
+}
+
+.fa-user-times {
+    opacity: 0.90;
+    /* Opacity (Transparency) */
+    color: rgba(255, 0, 0, 0.75);
+    /* RGBA Color (Alternative Transparency) */
+    -webkit-filter: blur(0.5px);
+    /* Blur */
+    -moz-filter: blur(0.5px);
+    filter: blur(0.5px);
+}
+
+.fa-user-check {
+    opacity: 0.90;
+    /* Opacity (Transparency) */
+    color: yellowgreen;
+    /* RGBA Color (Alternative Transparency) */
+    -webkit-filter: blur(0.5px);
+    /* Blur */
+    -moz-filter: blur(0.5px);
+    filter: blur(0.5px);
+}
+
+.fa-user-edit {
+    opacity: 0.90;
+    /* Opacity (Transparency) */
+    color: orange;
+    /* RGBA Color (Alternative Transparency) */
+    -webkit-filter: blur(0.5px);
+    /* Blur */
+    -moz-filter: blur(0.5px);
+    filter: blur(0.5px);
+}
+
+h4 {
+    font-size: 18px;
+    font-weight: bold;
+    color: cornflowerblue;
+}
+
+.image_container {
+    display: table-cell;
+    text-align: center;
+    vertical-align: middle;
+    padding-left: 3.0em;
+    align-items: center;
+    align-content: center
+}
+
+.image_container img {
+    vertical-align: baseline;
+    padding-left: 3.0em;
+}
+
+img {
+    vertical-align: baseline;
+    padding-left: 3.0em;
+}
+
+.jumbotron {
+    padding: 20px 0;
+    background-color: lightskyblue
+}
+
+.jumbotron h1 {
+    font-size: 50px;
+    color: slategray;
+}
+
+.jumbotron p {
+    margin-bottom: 3px;
+    font-size: 21px;
+    font-weight: 200;
+    color: darkslategray
+}
+
+#panelLeft {
+    margin-top: 0.5em;
+    margin-bottom: 0.5em;
+    float: left;
+}
+
+#panelRight {
+    margin-top: 0.5em;
+    margin-bottom: 0.5em;
+    margin-left: 1em;
+    float: left;
+}
+
+.progress-bar1 {
+    background-color: orange !important;
+}
+
+.progress-bar2 {
+    background-color: yellowgreen !important;
+}
+
+.resultInfoPanel {
+    display: inline-block;
+    width: 700px;
+    font-weight: bold;
+    margin-top: 0.5em;
+    margin-bottom: 0.5em;
+    background-color: #C4CDC1;
+}
+
+td,
+th {
+    border: none;
+    padding: 0.5rem;
+    text-align: left;
+    color: gray
+}
+
+table {
+    border-spacing: 0.5rem;
+    border-collapse: collapse;
+    vertical-align: middle;
+}
+
+.text-primary {
+    color: white
+}
+
+#topBar {
+    background-color: #00aeff;
+    width: 100%;
+    color: #DEE1DD;
+    height: 40px;
+    line-height: 40px;
+    text-align: left;
+}
+
+#title {
+    font-size: 25px;
+    font-weight: bold;
+    font-style: normal;
+    padding-left: 2.0em;
+    display: inline-block;
+    vertical-align: middle;
+    line-height: normal;
+    color: antiquewhite;
+}

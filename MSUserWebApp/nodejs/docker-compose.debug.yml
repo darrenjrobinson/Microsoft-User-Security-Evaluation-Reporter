@@ -1,0 +1,12 @@
+version: '2.1'
+
+services:
+  nodejs:
+    image: nodejs
+    build: .
+    environment:
+      NODE_ENV: development
+    ports:
+      - 7071:7071
+      - 9229:9229
+    command: node --inspect=0.0.0.0:9229 index.js

@@ -1,0 +1,487 @@
+<!doctype html>
+<html ng-app="consoleApp">
+
+<!-- 
+To collect user behavior analytics about your application, 
+insert the following script into each page you want to track.
+Place this code immediately before the closing </head> tag,
+and before any other scripts. Your first data will appear 
+automatically in just a few seconds.
+-->
+<script type="text/javascript">
+    var appInsights = window.appInsights || function (a) {
+        function b(a) {
+            c[a] = function () {
+                var b = arguments;
+                c.queue.push(function () {
+                    c[a].apply(c, b)
+                })
+            }
+        }
+        var c = {
+                config: a
+            },
+            d = document,
+            e = window;
+        setTimeout(function () {
+            var b = d.createElement("script");
+            b.src = a.url || "https://az416426.vo.msecnd.net/scripts/a/ai.0.js", d.getElementsByTagName(
+                "script")[0].parentNode.appendChild(b)
+        });
+        try {
+            c.cookie = d.cookie
+        } catch (a) {}
+        c.queue = [];
+        for (var f = ["Event", "Exception", "Metric", "PageView", "Trace", "Dependency"]; f.length;) b("track" + f.pop());
+        if (b("setAuthenticatedUserContext"), b("clearAuthenticatedUserContext"), b("startTrackEvent"), b(
+                "stopTrackEvent"), b("startTrackPage"), b("stopTrackPage"), b("flush"), !a.disableExceptionTracking) {
+            f = "onerror", b("_" + f);
+            var g = e[f];
+            e[f] = function (a, b, d, e, h) {
+                var i = g && g(a, b, d, e, h);
+                return !0 !== i && c["_" + f](a, b, d, e, h), i
+            }
+        }
+        return c
+    }({
+        instrumentationKey: "5bfcd8d8-cfa2-4f79-81cb-fcd92aff38f5"
+    });
+
+    window.appInsights = appInsights, appInsights.queue && 0 === appInsights.queue.length && appInsights.trackPageView();
+</script>
+
+<head>
+    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo"
+        crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.3/umd/popper.min.js" integrity="sha384-ZMP7rVo3mIykV+2+9J3UJ46jBk0WLaUAdn689aCwoqbBJiSnjAK/l8WvCWPIPm49"
+        crossorigin="anonymous"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/js/bootstrap.min.js" integrity="sha384-ChfqqxuZUCnJSK3+MXmPNIyE6ZbWh2IMqE241rYiqJxyMiZ6OW/JmZQ5stwEULTy"
+        crossorigin="anonymous"></script>
+
+    <script src="https://code.angularjs.org/1.3.10/angular.min.js"></script>
+    <script src="https://code.angularjs.org/1.3.10/angular-route.min.js"></script>
+    <script src="https://code.angularjs.org/1.3.10/angular-resource.min.js"></script>
+
+    <script src="javascripts/lookups.js"></script>
+    <script src="javascripts/msuser.js"></script>
+
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.2/css/bootstrap-theme.min.css">
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.6.3/css/all.css" integrity="sha384-UHRtZLI+pbxtHCWp1t77Bi1L4ZtiqrqD80Kn4Z8NTSRyMA2Fd33n5dQ8lWUE00s/"
+        crossorigin="anonymous">
+    <link href="https://use.fontawesome.com/releases/v5.6.3/css/all.css">
+
+    <script src="https://cdn.jsdelivr.net/npm/zl-fetch@2.1.5"></script>
+    <!--Stylesheet-->
+    <link rel="stylesheet" href="./javascripts/style.css">
+
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>User Security Evaluation Reporter</title>
+
+    <meta name="description" content="Microsoft USER">
+    <meta name="author" content="Darren Robinson - darren@darrenjrobinson.com">
+</head>
+
+<body>
+    <div class="row">
+        <div class="col-md-12">
+            <div class="row">
+                <div class="col-md-3">
+                    <img alt="Microsoft User" src="images/MS-User-Logo-320px.png">
+                </div>
+                <div class="col-md-3">
+                    <p><a href="https://azure.microsoft.com/en-au/services/active-directory/" target="_blank"><img src="images/azure-logo-only-100px.png"
+                                alt="Microsoft User"></a></p>
+                </div>
+                <div class="col-md-3">
+                    <p><a href="https://lithnet.io/" target="_blank"><img src="images/Lithnet-Logo-100px.png" alt="Microsoft User"></a></p>
+                </div>
+                <div class="col-md-3">
+                    <p><a href="https://haveibeenpwned.com/" target="_blank"><img src="images/HIBP-Logo-100px.png" alt="Microsoft User"></a></p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="jumbotron jumbotron-fluid bg-info text-white text-center">
+        <div class="container">
+            <h1 class="display-1">User Security Evaluation Reporter</h1>
+            <p class="lead">How can we improve our security score and posture today?</p>
+        </div>
+    </div>
+    </br>
+    <div class="col-md-4">
+        <div class="card text-muted">
+            <div class="card-block">
+                <span class="fa-stack fa-2x">
+                    <i class="fa fa-circle fa-stack-2x"></i><strong class="fa-stack-1x text-primary">1</strong></i>
+                </span>
+                <span class="fa-stack fa-2x">
+                    <i class="fa fa-circle fa-stack-2x"></i><strong class="fa-stack-1x text-primary">2</strong></i>
+                </span>
+                <span class="fa-stack fa-2x">
+                    <i class="fa fa-circle fa-stack-2x"></i><strong class="fa-stack-1x text-primary">3</strong></i>
+                </span>
+
+                <p class="card-text">
+                    <h3 class="card-title">Check out Today's Azure Security Score </h3>
+                    <p>It needs improvement, and we can do better. </br>
+                        Start by reviewing the latest Risk Events below. <i class="fa fa-arrow-alt-circle-down fa-2x img-fluid"></i></br>
+                        Select <b>'lookup'</b> on an event to retrieve information on that user. </br>
+                        You will then be able to review the associated users Secure Score Risk Profile drawn from their Risk
+                        Events, Registered MFA Methods, Password Status, AD Password Sign-in and Password Reset activity.</br>
+                        Use the <b>Search for a User</b> lookup function to do the same for any user in your organisation. 
+                    </p>
+                </p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-muted">
+            <div class="card-block">
+                <i class="fas fa-user-shield fa-4x img-fluid"></i>
+                <div class="secureScoreResult">
+                    <p class="card-text">
+                        <h3 class="card-title">.......loading today's Azure Security Score from the Microsoft Security
+                            Graph</br> </br>
+                            <center><i class="fab fa-3x fa-windows blink"></i></center>
+                        </h3>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-muted">
+            <div class="card-block">
+                <i class="fa fa-list-alt fa-4x img-fluid"></i>
+                <p class="card-text">
+                    <h3 class="card-title">Help improve our Azure Security Score</h3>
+                    <b>Todo List</b>
+                    <ul>
+                        <li>Review the latest Active Risks below</li>
+                        <li>Review users for their:
+                            <ul>
+                                <li>MFA Enrollment Methods</li>
+                                <li>User Risk Events</li>
+                                <li>Password Status</li>
+                                <li>Sign-In Activity</li>
+                                <li>Password Reset Activity</li>
+                            </ul>
+                        </li>
+                    </ul>
+                </p>
+            </div>
+        </div>
+    </div>
+    </br></br></br></br>
+    </br></br></br></br></br></br></br></br>
+    <div ng-controller="ConsoleController"></div>
+    </br></br></br></br></br></br></br></br></br>
+   
+    <div id="panelUsers" style="display:block;">
+        <div class="col-md-4">
+            <h4 class="text-right text-info">
+                Search for a user
+            </h4>
+        </div>
+        <div class="col-md-4">
+            <div class="active-cyan-3 active-cyan-4 mb-4">
+                <input class="form-control" type="text" placeholder="Search for a user (e.g Rick Sanchez)" aria-label="Search"
+                    id=userLookupName>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <button type="button" class="btn btn-primary" id="userLookup" onclick="userLookup(document.getElementById('userLookupName').value)">Find</button>
+        </div>
+    </div>
+    </br>
+    </br>
+    <div class="container" id="refresh" style="display: none">
+        <center>
+            <button type="button" class="btn btn-primary btn-lg" id="newSearch" onclick="location.reload(true)">New
+                Search</button>
+        </center>
+    </div>
+    <div class="container" id="gettingUserProfile" style="display: none">
+        <center>
+            <div class="card text-muted">
+                <p class="card-text">
+                    <center><i class="fab fa-3x fa-windows blink"></i></center>
+                    <h3 class="card-title">...retrieving users details</br>
+                    </h3>
+                </p>
+            </div>
+        </center>
+    </div>
+    </br>
+    <div class="container" id="userRecomendations" style="display:none;">
+        <div class="userSScoreSummaryDetails">
+            <div class="col-md-8 col-lg-4"></div>
+            <div class="col-md-8 col-lg-4">
+                <center>
+                    <p>
+                        <h2>User Secure Score</br>Risk Profile</h2>
+                    </p>
+                    <div class="userSScoreSummary">
+                    </div>
+                </center>
+                </br>
+                <div class="card text-muted">
+                    <div class="card-block">
+                        <p class="card-text">
+                            <h3 class="card-title">User Security Summary</h3>
+                            <!--User Risk Events Progress Bar-->
+                            <div class="calcUserRiskProgress"></div>
+                            <!--Password Pwned Status Progress Bar-->
+                            <div class="returnedPwnedPwdStatus"></div>
+                            <!--MFA Config Progress Bar-->
+                            <div class="calcUserMFAProgress"></div>
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-8 col-lg-4"></div>
+        </div>
+    </div>
+
+    </br> </br>
+    <div class="container" id="userScoreandProfile" style="display:none;">
+
+        <div class="row">
+            <div class="col-md-8 col-lg-4">
+                <div class="card text-muted">
+                    <i class="fa fa-exclamation fa-4x img-fluid"></i>
+                    <div class="card-block">
+                        <h3 class="card-title">Risk Events</h3>
+                        <p>This check looks for any user Risk Events such as </br><b>Malware</b>, </br><b>Anonymous IP</b>
+                            (use of Tor/VPN's) and </br><b>Impossible Travel</b> events. </br>Evaluate any risks in the
+                            context of the user, their position and other recent activity.</p>
+                        <div class="calcUserRiskProgress"></div>
+
+                        <p class="card-text">
+                            <div class="calcUserRiskSummary">
+                            </div>
+                        </p>
+                        <a href="#usersRiskDetails" onclick="toggle_visibility('usersRiskDetails');">
+                            <center>Click to toggle the users risk events</center>
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-8 col-lg-4">
+                <div class="card text-muted">
+                    <i class="fa fa-user-lock fa-4x img-fluid"></i>
+                    <div class="card-block">
+                        <h3 class="card-title">Enrolled MFA Methods</h3>
+                        <p>This check enumerates the users enrolled Multi-Factor Authentication (MFA) methods. It is
+                            preferred the users' primary method is <b>Authenticator App</b>. Text Message (SMS) should
+                            be <b>avoided</b> and used only when the user does not have a Smart Device compatiable with
+                            Authenticator Apps.</p>
+
+                        <div class="calcUserMFAProgress"></div>
+
+                        <a href="#usersMFADetails" onclick="toggle_visibility('usersMFADetails');">
+                            <center>Click to toggle the users MFA Methods details</center>
+                        </a>
+
+                        <p class="card-text"></p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-8 col-lg-4">
+                <div class="card text-muted">
+                    <i class="fa fa-user-secret fa-4x img-fluid"></i>
+                    <div class="card-block">
+                        <h3 class="card-title">Pwned Password Check</h3>
+                        <div class="userPwnedPassword" id="usersPwnedPasswordStatus">
+                            <p>This check compares the NTLM hash of the users Active Directory Password with the <b>'Have
+                                    I Been Pwned'</b> v4 Pwned Passwords list. If the users Active Directory Password
+                                has been Pwned it is <b>strongly</b> recommened to get the user to change their
+                                password to mitigate Password Spray / Brute Force attacks.</p>
+                            <div class="returnedPwnedPwdStatus">
+                                <p>...... getting Pwned Password Status</p>
+                            </div>
+                        </div>
+                        <p class="card-text"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container" id="userRiskandDetails" style="display:none;">
+        <h2>
+            <p>Recent User Activity and User Details</p>
+        </h2>
+        </br>
+        <div class="row">
+            <div class="col-md-12 col-lg-4">
+                <div class="card text-muted">
+                    <i class="fa fa-sign-in-alt fa-4x img-fluid"></i>
+                    <div class="card-block">
+                        <h3 class="card-title">Recent Sign-In Activity</h3>
+                        <p>Review recent user Sign-In Events in conjunction with User Risk Events and Password Resets
+                            to determine if there is ambiguous activity for the assoicated user account. For Windows
+                            Desktop Sign-Ins Azure AD Associated is highly recomended and preferred.</p>
+                        <p class="card-text">
+                            <div class="calcSignInSummary">
+                            </div>
+                        </p>
+                        <a href="#usersSignInDetails" onclick="toggle_visibility('usersSignInDetails');">
+                            <center>Click to toggle the users sign-in
+                                details</center>
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-12 col-lg-4">
+                <div class="card text-muted">
+                    <i class="fa fa-unlock-alt fa-4x img-fluid"></i>
+                    <div class="card-block">
+                        <h3 class="card-title">Recent SSPR Activity</h3>
+                        <p>Any recent Azure Password Reset activity initiated by the user will be shown below. If there
+                            are repeated unsuccessful events for a user it could imply attempts to compromise the
+                            assoicated account. Review in conjucntion with user Risk Events.</p>
+                        <p class="card-text">
+                            <div class="calcSSPRSummary">
+                            </div>
+                        </p>
+                        <a href="#usersSSPRActivity" onclick="toggle_visibility('usersSSPRActivity');">
+                            <center>Click to toggle the users SSPR
+                                activity</center>
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-12 col-lg-4">
+                <div class="card text-muted">
+                    <i class="fa fa-id-badge fa-4x img-fluid"></i>&nbsp;&nbsp;<i class="fas fa-laptop fa-4x"></i>&nbsp;&nbsp;<i
+                        class="fas fa-mobile-alt fa-4x"></i>
+                    <div class="card-block">
+                        <h3 class="card-title">User & Device(s) Details</h3>
+                        <p>Use the link below to toggle additional information about the user such as their Account
+                            Status, Title, Department, Business Office Location, StaffID, Manager. </br>Also their
+                            Azure AD registered and InTune managed devices.</p>
+
+                        <p class="card-text">
+                            <div class="calcDevicesSummary">
+                            </div>
+                        </p>
+                        <a href="#usersProfileDetails" onclick="toggle_visibility('usersProfileDetails');">
+                            <center>Click to toggle the users
+                                profile details</center>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    </br></br>
+    <div class="usersLookupResults">
+        <div class="userSearchTable" id="userSearchResultsTable" style="display:none;">
+            </br>
+            <div class="card text-muted">
+                <p class="card-text">
+                    <center>
+                        <i class="fab fa-3x fa-windows blink"></i>
+                        <h3 class="card-title">...searching for user </br>
+                    </center>
+                    </h3>
+                </p>
+            </div>
+        </div>
+    </div>
+    <div class="userRiskEventsDetailsTable" id="usersRiskDetails" style="display:none;">
+        <div class="returnedUserRiskEvents">
+        </div>
+    </div>
+
+    <div class="userSignInDetailsTable" id="usersSignInDetails" style="display:none;">
+        <div class="returnedSignInEvents">
+        </div>
+    </div>
+
+    <div class="userSSPRDetailsTable" id="usersSSPRActivity" style="display:none;">
+        <div class="returnedSSPREvents">
+        </div>
+    </div>
+    <div class="userAccountDetailsTable" id="usersProfileDetails" style="display:none;">
+        <div class="returnedAADUserDetails">
+        </div>
+    </div>
+    <div class="userMFADetailsTable" id="usersMFADetails" style="display:none;">
+        <div class="returnedUserMFAMethods">
+        </div>
+    </div>
+
+    </br></br>
+    <div class="returnedRiskEvents" sytle="display:block;">
+        <div class="card text-muted">
+            <p class="card-text">
+                <h3 class="card-title">...currently retrieving recent Risk Events </br>
+                    <center><i class="fab fa-3x fa-windows blink"></i></center>
+                </h3>
+            </p>
+        </div>
+    </div>
+    </br>
+    </br>
+    <div id="riskEvents">
+    </div>
+<!--    </div> -->
+    <!-- Footer -->
+    <div class="jumbotron jumbotron-fluid bg-info text-white text-center">
+        <!-- Footer Elements -->
+        <div class="container">
+            <!-- Grid row-->
+            <div class="row">
+                <!-- Grid column -->
+                <div class="col-md-12">
+                    <div class="mb-5 flex-center">
+                        <!-- Dev -->
+                        <a class="fb-ic">
+                            <a href="https://devpost.com/darrenjrobinson?ref_content=user-portfolio&ref_feature=portfolio&ref_medium=global-nav"
+                                target="_blank"><i class="fab fa-dev fa-lg white-text mr-md-5 mr-3 fa-2x"> </i></a>
+                        </a>
+                        <!-- Twitter -->
+                        <a class="tw-ic">
+                            <a href="https://twitter.com/darrenjrobinson" target="_blank"><i class="fab fa-twitter fa-lg white-text mr-md-5 mr-3 fa-2x">
+                                </i></a>
+                        </a>
+                        <!--Linkedin -->
+                        <a class="li-ic">
+                            <a href="https://www.linkedin.com/in/darrenjrobinson/" target="_blank"><i class="fab fa-linkedin-in fa-lg white-text mr-md-5 mr-3 fa-2x">
+                                </i></a>
+                        </a>
+                        <!--WordPress-->
+                        <a class="ins-ic">
+                            <a href="https://blog.darrenjrobinson.com" target="_blank"><i class="fab fa-wordpress fa-lg white-text mr-md-5 mr-3 fa-2x">
+                                </i></a>
+                        </a>
+                        <!--GitHub-->
+                        <a class="pin-ic">
+                            <a href="https://github.com/darrenjrobinson" target="_blank"><i class="fab fa-github fa-lg white-text fa-2x">
+                                </i></a>
+                        </a>
+                    </div>
+                </div>
+                <!-- Grid column -->
+            </div>
+            <!-- Grid row-->
+        </div>
+        <!-- Footer Elements -->
+        <!-- Credit -->
+        <div class="footer-copyright text-center">Hacked together for the Microsoft Security Graph Hackathon (Jan-Feb
+            2019)
+            by
+            <a href="https://darrenjrobinson.com/"> darrenjrobinson.com</a>
+        </div>
+        <!-- Credit -->
+    </div>
+    <!-- Footer -->
+</body>
+
+</html>
