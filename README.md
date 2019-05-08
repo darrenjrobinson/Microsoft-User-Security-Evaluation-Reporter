@@ -1,4 +1,4 @@
-# Microsoft-User-Security-Evaulation-Reporter
+# Microsoft-User-Security-Evaluation-Reporter
 Evaluating and Reporting on Azure Active Directory/Active Directory Users Security Posture
 
 [Solution Demo](https://youtu.be/pnoA957DRqM)
