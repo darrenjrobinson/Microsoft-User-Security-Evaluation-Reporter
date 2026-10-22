@@ -1,173 +1,163 @@
-# Microsoft-User-Security-Evaluation-Reporter
-Evaluating and Reporting on Azure Active Directory/Active Directory Users Security Posture
+# Microsoft User Security Evaluation Reporter (USER)
 
-[Solution Demo](https://youtu.be/pnoA957DRqM)
+Evaluate and report on the security posture of individual Microsoft Entra ID users, from one place.
 
-[Devpost Solution](https://devpost.com/software/microsoft-user-security-evaluation-reporter)
+[![CI](https://github.com/darrenjrobinson/Microsoft-User-Security-Evaluation-Reporter/actions/workflows/ci.yml/badge.svg)](https://github.com/darrenjrobinson/Microsoft-User-Security-Evaluation-Reporter/actions/workflows/ci.yml)
+[![Deploy](https://github.com/darrenjrobinson/Microsoft-User-Security-Evaluation-Reporter/actions/workflows/deploy.yml/badge.svg)](https://github.com/darrenjrobinson/Microsoft-User-Security-Evaluation-Reporter/actions/workflows/deploy.yml)
 
-## Problem
-A Security Administrator within an Organisation enables security related configuration options on an Azure Tenant to implement security controls that align an organisation with Microsoft recommendations and best practice. 
-The Azure Security Score provides an evaluation on the alignment of an organisation with best practice, however to some extent it still requires end users to have the right configuration for security related elements of their profile. But as a Service Desk Operator or Cyber Security Officer there isn’t a single view of a user’s security posture that can give you an individual user security score summary.
+🏆 Originally built for (and winner of) the Microsoft Security Graph Hackathon, Jan–Feb 2019:
+[Devpost](https://devpost.com/software/microsoft-user-security-evaluation-reporter) · [Solution demo](https://youtu.be/pnoA957DRqM).
+The original 2019 code (PowerShell Azure Functions + Node web app) is preserved at the
+[`hackathon-2019`](https://github.com/darrenjrobinson/Microsoft-User-Security-Evaluation-Reporter/tree/hackathon-2019) tag.
 
-## Introduction
-Microsoft User Security Evaluation Reporter (USER) is an Azure AD and Active Directory tool for use by the Service Desk and Cyber Security Officers to get instant visibility of an organisations Azure Security Score that allows them to then evaluate current risks within an organisation right down to individual users.
-When the Azure WebApp loads the current Azure Security Score is retrieved, evaluated and displayed for alignment with Microsoft Recommendations. Also, on load the last 5 Active Security Risk Events are displayed. 
-The Service Desk Operator or Cyber Security Officer can select one of the recent Security Events and drill down further into the associated identity. They will be quickly able to understand the users’ individual security posture aligned with best practice. 
-What are the recent Security Risk Events for that user? Does that user;
-*	Have MFA enabled? Is MFA enabled with an Authenticator App as the primary method?
-*	Is the users Active Directory password in the Pwned Passwords v4 list from Have I Been Pwned?
-*	Has the user recently being attempting Azure Password Reset functions?
-*	What are the last 10 logins for that user? 
-*	What is the base user information for that user and what devices are registered to that user? Is the device Azure AD Joined?
-Guidance is given for the retrieved user based on the configuration of the security options or risks associated with their profile. 
-### Service Desk Operator
-Likewise, any user in the environment can be searched for and returned. When a Service Desk Operator receives a call for a user they can use Microsoft USER to search for and retrieve that user. 
-Does the user have multiple accounts (Hybrid (AD and Azure AD), Cloud Only and/or B2B)? What is the users recent activity? 
-As part of the call with the end user the Service Desk Operator could configure the users AD/AAD account to require a password change on next logon if their password has been Pwned. They can advise and talk the user through changing their primary MFA method to use an Authenticator App over SMS. They can see if the user has been having problems using Azure Password Reset and why that maybe failing (e.g fuzzy password violation). They can also review the recent logons for the user and if the user’s Windows Desktop isn’t Azure AD Joined they can talk the user through doing that. 
+## The problem
 
-## Summary
-Through everyday use of this tool as part of end-user interactions by the Service Desk Operators and Cyber Security Officers, the Security Posture of end users calling the Service Desk or those who are being flagged with Risk Events can be improved. 
-Continuous improvement of end user security posture will also improve the Azure Security Score for the organisation enforcing and aligning with the configuration implemented by the Security Administrators. 
+Security administrators turn on tenant-wide controls to align with Microsoft recommendations, and Microsoft
+Secure Score measures that alignment. But some of the outcome still depends on how each user is set up, and
+a Service Desk operator or Cyber Security Officer has no single view of one user's security posture.
 
-# Setup Requirements
-To get and utilise the full functionality of this project you will need an environment that has;
-* Active Directory
-* Azure Active Directory (synchronised from Active Directory with Azure AD Connect)
-* Users enrolled for Azure MFA
-* Azure Self Service Password Reset
-* Azure App Service for an Azure WebApp and Azure Functions
+## What it does
 
-## 1. Azure AD Application
-Using the Azure Portal and the Azure Active Directory Blade register an application. The application will require the following permissions;
-* AuditLog.Read.All
-* Directory.Read.All
-* IdentityRiskEvent.Read.All
-* SecurityEvents.Read.All
-* User.Read
-* User.Read.All
+When the app loads it shows today's **Microsoft Secure Score** and the **five most recent active risk
+detections**. Select **Lookup** on an event, or **search** for any user, to see their posture:
 
-## 2. Azure Functions
-The MSUser-Hackathon-azFunctions.zip archive contains the Azure Functions used by the project.
-All the functions are PowerShell v1 Functions.  
-You will need to create an Azure Function App Plan and Azure Function App. 
-* They leverage Managed Service Identity to access the Azure Key Vault. Enable this under the 'Networking' => 'Identity' section of Platform Features for your Azure Function App. Use System Assigned.
-* IMPORTANT: Before uploading the Azure Functions under Function App Settings set the Runtime Version to ~1. These PowerShell Functions will not run under v2. 
-* Under Platform Features => API => CORS remove the existing Allowed Origins and add * to allow all initially. Once you have your app deployed and you know the name of the WebApp replace * with the WebApp URL.
-You can now upload the MSUser-Hackathon-azFunctions.zip archive  using Kudu. For each of the Functions you will need to get the URL from the Azure Functions Blade in the Azure Portal and update the 'lookups.js' file in the webapp with the path to each one.
-Each Function contains a 'Modules' directory that contains a slightly modified version of the PSMSGraph PowerShell Module available from my (fork of the PSMSGraph Module here) https://github.com/darrenjrobinson/PSMSGraph
-The modification allows the automation of the regeneration of oAuth Tokens from within Azure Functions. The modified version is included in the Azure Functions export. 
+| Check | Answers | Source |
+|---|---|---|
+| Risk events | Active risk detections (atypical travel, anonymous IP, password spray…) and the user's risk level | Entra ID Protection |
+| MFA methods | Registered for MFA? Is the primary method Authenticator / passkey rather than SMS or voice? | Authentication methods registration report |
+| Pwned check | Is the user's email in **Have I Been Pwned** breaches or pastes? Has Entra found leaked credentials? | HIBP v3 API + Entra ID Protection |
+| Sign-ins | Last 10 sign-ins (30 days): app, result, location, device, Conditional Access | Sign-in logs |
+| SSPR activity | Self-service password reset attempts and failure reasons (e.g. banned/fuzzy password) | Audit logs |
+| User & devices | Account status, title, department, manager, on-premises identity; registered vs Entra-joined devices | Users / devices |
 
-### MSUser
-This Function isn't actively called but can be used as a test function for MS Graph Queries
-A folder under this function named Tokens is required. It contains token artifacts for the registered AzureAD App that allows regeneration of JWT oAuthv2 tokens. Note: The Access Token and Refresh Token is not stored in this folder, but in the Azure KeyVault. See Authentication Tokens below for generating Tokens for the Web App. 
+The **User security summary** combines these with the original 2019 scoring into a verdict: *Awesome. Great
+profile*, *OK, but could be improved* or *Immediate attention required*. Each check also gives guidance, so
+the operator can, for example, talk a user through moving from SMS to the Authenticator app, or require a
+password change after a breach.
 
-Update the following lines with your AppID and AppSecret
-$graphAppCredPwd = ConvertTo-SecureString "yourAppSecret" -AsPlainText -Force
-$graphAppCreds = New-Object System.Management.Automation.PSCredential ("yourAppID", $graphAppCredPwd)
+The UI follows the original layout, modernised with Bootstrap 5.3, Bootstrap Icons, skeleton loaders and a
+**Light / Dark / Follow system** theme switch.
 
-### MSUser-Batch
-This Function is called when looking up a user from the WebApp to return information from Micrsofot Graph. It utilises Microsoft Graph JSON Batching 
-* Detailed post on JSON Batching (Batching Microsoft Graph API Requests with JSON Batching and PowerShell) https://blog.darrenjrobinson.com/batching-microsoft-graph-api-requests-with-json-batching-and-powershell/
+## Architecture
 
-Update the following lines with your AppID and AppSecret
-$graphAppCredPwd = ConvertTo-SecureString "yourAppSecret" -AsPlainText -Force
-$graphAppCreds = New-Object System.Management.Automation.PSCredential ("yourAppID", $graphAppCredPwd)
+```mermaid
+flowchart LR
+  op([Operator]) -->|Entra ID sign-in<br/>MSUser.Operator role| ea[App Service Authentication]
+  subgraph Azure App Service - Linux, Node 24
+    ea --> app[Express app<br/>static UI + /api]
+  end
+  app -->|Managed identity<br/>fixed queries, JSON batching| graph[(Microsoft Graph v1.0)]
+  app -->|Key Vault reference| kv[(Key Vault<br/>hibp-api-key)]
+  app -->|API key| hibp[(Have I Been Pwned v3)]
+  app --> ai[(Application Insights)]
+```
 
-### MSUser-MFA
-This Function is called to retrieve a users MFA settings. As user MFA settings are not currently avaialble via Microsoft Graph the information is exported from Azure Active Directory using the MSOnline PowerShell Module and put into Azure Table Service. The MSUser-MFA Function queries the Azure Table Service for the users MFA settings. The Azure Storage Connection information is stored in Azure Key Vault. Update the MSUser-MFA Function to provide the path to the Key Vault for your Storage Key and Storage Account Name. See Azure Key Vault section below for creating these entries.
-* $vaultSecretstorageAccountkeyURI = 'https://yourKeyVault.vault.azure.net/secrets/storageAccountkey?'
-* $vaultSecretstorageAccountNameURI = 'https://yourKeyVault.vault.azure.net/secrets/storageAccountName?'
+- **No secrets in code or config.** The Web App's system-assigned managed identity calls Graph, the HIBP key is
+  a Key Vault reference, and GitHub Actions signs in to Azure with OIDC federation.
+- **Fixed queries only.** The browser never sends Graph URLs. Every call is defined in
+  [`src/graph/queries.ts`](src/graph/queries.ts) and takes only validated object ids or search text.
+- **Per-section resilience.** If a tenant lacks a P1/P2 licence or a permission is missing, only that panel
+  shows "unavailable"; the rest of the profile still renders.
 
-#### Example to export users MFA Configuration using the MSOnline Module
-* $Accounts = (Get-MsolUser -All | Where-Object {$_.StrongAuthenticationMethods -ne $Null} | Sort-Object DisplayName)
-* See MFA-User-Config-Settings.ps1 for an example script to export MFA User Settings
+### What changed from 2019
 
-#### How to import data into Azure Table Service with PowerShell
-* Detailed post on loading data into Azure Table Service (Loading and Querying Data in Azure Table Storage using PowerShell) https://blog.darrenjrobinson.com/loading-and-querying-data-in-azure-table-storage-using-powershell/
+| 2019 | Now |
+|---|---|
+| PowerShell Azure Functions **runtime v1**, forked PSMSGraph, refresh tokens in Key Vault | Single Node 24 / TypeScript web app, managed identity |
+| Browser posted arbitrary Graph URLs to a batch function | Fixed server-side queries; Graph JSON batching kept internally |
+| Function keys in `lookups.js` | Entra ID sign-in (Easy Auth) + app role |
+| Server-built HTML strings | JSON API, DOM rendered with `textContent`, strict CSP |
+| MSOnline export → Table Storage for MFA | `userRegistrationDetails` report |
+| Beta `identityRiskEvents` | v1.0 `identityProtection/riskDetections` + `riskyUsers` |
+| On-prem Lithnet NTLM-hash check over remote PowerShell | HIBP breach/paste lookup + Entra leaked-credential detections |
+| Manual Docker build/push from VS Code | GitHub Actions → Bicep → staging slot → smoke test → swap |
 
-* See Load-MFA-User-Settings-AzureTableService.ps1 for an example script to import MFA data into Azure Table Service
+## Prerequisites
 
-### MSUser-PwnedPassword
-This Function checks the selected users Active Directory Password to see if it has been compromised. The Function uses Remote PowerShell to connect to an AD Domain Joined host and run the Lithnet Password Protection for Active Directory Module. It returns the users Pwned Password Status.
-The connections settings for the host to remote powershell into are store in the Azure Key Vault
-* More information on the Lithnet Password Protection for Active Directory can be found here (Lithnet Password Protection for Active Directory) https://blog.darrenjrobinson.com/lithnet-password-protection-for-active-directory/
-* Ensure you implemented appropriate security controls for your organisation to restrict access to this functionality
-* Update the MSUser-PwnedPassword Azure Function with the Key Vault URL's for ADDCHost, ADDCUser and ADDCPassword. See Azure Key Vault section below for creating these entries. 
-* Configure the host you will be connecting to within the Active Directory environment to validate Pwned Password User Status for Remote PowerShell. (See this post for configuring that) https://blog.darrenjrobinson.com/remotely-managing-your-fimmim-synchronisation-server-using-powershell-and-the-lithnet-miis-automation-powershell-module/ 
+- An Azure subscription and a Microsoft Entra ID tenant. **Entra ID P1/P2** is needed for sign-in logs,
+  audit logs, risk detections and the MFA registration report.
+- Permissions to create app registrations, assign Azure RBAC, and (once) grant Graph application permissions:
+  Privileged Role Administrator or Global Administrator.
+- [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli), PowerShell 7+, and optionally the
+  [GitHub CLI](https://cli.github.com/).
+- Optional: a [Have I Been Pwned API key](https://haveibeenpwned.com/API/Key).
 
-### MSUser-PwnedPwdDemo
-This Function is a demo function to simulate the return of a users password status. It simply returns randomly true or false. 
+## Deploy
 
-### MSUser-RiskEvents
-This Function is called on page load to return the 5 most recent Risk Events that are flagged as Active and display them in the app. 
+1. **Bootstrap (once).** This creates the resource group, the Easy Auth app registration with the `MSUser.Operator`
+   role (assigned to you), and a deployment identity trusted by this repo's `production` GitHub environment:
 
-Update the following lines with your AppID and AppSecret
-$graphAppCredPwd = ConvertTo-SecureString "yourAppSecret" -AsPlainText -Force
-$graphAppCreds = New-Object System.Management.Automation.PSCredential ("yourAppID", $graphAppCredPwd)
+   ```powershell
+   az login
+   ./scripts/bootstrap.ps1 -SubscriptionId <subscription-id> -ResourceGroup rg-msuser `
+     -Location australiaeast -AppName <globally-unique-name> -ConfigureGitHub
+   ```
 
-### MSUser-SearchUsers
-This Function is called when using the Find User search facility in the WebApp. It returns a table of users where the name entered matches the DisplayName attribute in Azure AD.
+   Without `-ConfigureGitHub`, the script prints the repository variables for you to add by hand:
+   `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_RESOURCE_GROUP`, `APP_NAME`,
+   `AUTH_CLIENT_ID`.
 
-Update the following lines with your AppID and AppSecret
-$graphAppCredPwd = ConvertTo-SecureString "yourAppSecret" -AsPlainText -Force
-$graphAppCreds = New-Object System.Management.Automation.PSCredential ("yourAppID", $graphAppCredPwd)
+2. **Deploy.** Push to `master` or run the **Deploy** workflow. It runs CI, deploys
+   [`infra/main.bicep`](infra/main.bicep) (App Service plan P0v3 with a staging slot, Web App, Key Vault, Log
+   Analytics and Application Insights), deploys to `staging`, checks `/healthz` and swaps into production.
 
-### MSUser-SecureScore
-This Function is called on page load to return the Azure Secure Score and display it in the app. 
+3. **Grant Graph permissions (once).** These go to the managed identities of the production and staging slots:
 
-Update the following lines with your AppID and AppSecret
-$graphAppCredPwd = ConvertTo-SecureString "yourAppSecret" -AsPlainText -Force
-$graphAppCreds = New-Object System.Management.Automation.PSCredential ("yourAppID", $graphAppCredPwd)
+   ```powershell
+   ./scripts/grant-graph-permissions.ps1 -ResourceGroup rg-msuser -AppName <name>
+   ```
 
-## 3. Azure Key Vault
-The Azure Key Vault is used for secrets associated with the MS User App.
-### Microsoft Graph Tokens
-Two entries are required for authentication of the MS User Web App to Azure AD. 
-* AccessToken - This contains a valid AAD oAuth Token for the Registered App. See Generating Tokens
-* RefreshToken - This contains a valid Refresh Token for the Registered App. See Generating Tokens
-* ADDCHost - The FQDN of the Host to connect to, to check a users password pwned status
-* ADDCUser - User Account used to connect to the ADDCHost with to verify pwned password status
-* ADDCPassword - Password for the ADDCUser account
-* storageAccountName - Name of the Azure Storage Account that contains the Azure Table Service Table for MFA Users Configuration data
-* storageAccountkey - Azure Storage Account Key that contains the Azure Table Service MFA Users Configuration data
-### Managed Service Identity
-In order for the Azure Function App to be able to retrieve and update secrets in the Key Vault the Function App will need permissions. 
-In the Key Vault under 'Access policies' add your Function App with;
-* Secret Permissions - minimum of Get, List and Set
+   | Permission (application) | Used for |
+   |---|---|
+   | `User.Read.All` | User search, profile, manager |
+   | `Directory.Read.All` | Registered devices |
+   | `AuditLog.Read.All` | Sign-ins, SSPR audit events, MFA registration details |
+   | `IdentityRiskEvent.Read.All` | Risk detections |
+   | `IdentityRiskyUser.Read.All` | User risk level |
+   | `SecurityEvents.Read.All` | Secure Score |
 
-## 4. Authentication Tokens
-The MSUser Azure Function mentioned above contains a subdirectory named Tokens. To generate the files to go into this directory, on a local workstation use the Generate-Artifiacts-to-Automate-New-oAuth-Tokens.ps1 script. 
-The script uses the (PSMSGraph PowerShell Module available here) https://github.com/markekraus/PSMSGraph 
-Update the before execution to contain your AppID and AppSecret for the AAD App created in Step 1. Also update for the path you wish to output the artifacts too and for your AAD Tenant name. 
-* Put the generated artifacts (except the AccessToken and RefreshToken) into the Tokens directory user the MSUser Azure Function. 
-* Put the AccessToken into the KeyVault under the name AccessToken. Create an Azure Function Application Setting named 'vaultSecretATURI' and put the Key Vault AccessToken URI in it. As these tokens will roll, don't give the URI to a specific token. Use the URI for the Secret e.g. https://myKeyVault.vault.azure.net/secrets/AccessToken? 
-* Put the RefreshToken into the KeyVault under the name RefreshToken. Create an Azure Function Application Setting named 'vaultSecretRTURI' and put the Key Vault RefreshToken URI in it. As these tokens will roll, don't give the URI to a specific token. Use the URI for the Secret e.g. https://myKeyVault.vault.azure.net/secrets/RefreshToken?  
+4. **Optional: enable HIBP.** Store the key and turn the feature on:
 
-## 5. NodeJS WebApp
-The Client WebApp is a NodeJS WebApp. 
+   ```bash
+   az keyvault secret set --vault-name <keyVaultName> --name hibp-api-key --value <key>
+   ```
 
-### Application Insights
-Azure Application Insights are enabled for this WebApp. In order to see the insights you will need to;
-* create an Application Insights in your Resource Group for this app
-* update the 'console.html' file ~ line 47 with your Instrumentation Key retreived after creating Applicaton Insights in the previous step
-* update the 'app.js' file ~ line 11 with your Instrumentation Key 
+   Then set the repository variable `HIBP_ENABLED=true` and re-run **Deploy**. (The Key Vault name is shown in
+   the deployment outputs.)
 
-### Azure Container Registry
-Create an Azure Container Registry if you don't already have one (using the guide found here)
-https://docs.microsoft.com/en-us/azure/container-registry/container-registry-get-started-portal
+5. **Grant access.** In *Enterprise applications → MS USER (&lt;name&gt;) → Users and groups*, assign the
+   **MS USER Operator** role to your Service Desk and security groups. Signed-in users without the role are
+   refused with HTTP 403.
 
-### Dockerize the WebApp
-Download and extract the NodeJS WebApp from here and extract to a local directory. Open the Folder containing the WebApp in VSCode. Install the VSCode Azure and Docker extensions if you don't already have them. 
-Create the Docker Image and deploy to the ACR you created in the previous step using VS Code. (Step by Step guide can be found here) https://code.visualstudio.com/tutorials/docker-extension/getting-started
-* The WebApp is NodeJS 
-* the pre-configured port is 7071
-* the cmd to start is 'node bin/www'
-* use az acr login --name 'your azure container registry name' in VSCode to authenticate before pushing the docker image to ACR (if you didn't create the ACR via VSCode (e.g you created it via the Azure Portal or have an existing ACR))
+> **Restrict network access too.** This app shows sensitive identity data. Also consider App Service access
+> restrictions or Private Endpoints, and Conditional Access on the MS USER enterprise application.
 
-### Deploy the WebApp from ACR
-Using VSCode and the Docker extension right click on the image and 'Deploy Image to Azure App Service'
+## Local development
 
-### Secure the WebApp
-It is highly recommended that you restrict access to this app. Ideally;
-* publish the WebApp using Azure AD App Proxy
-* configure network access lists under WebApp => Settings => Networking 
+```bash
+npm ci
+cp .env.example .env     # MOCK_GRAPH=true + AUTH_DISABLED=true
+npm run dev              # http://localhost:8080
+```
+
+Mock mode serves a small demo tenant ([`src/mock/fixtures.ts`](src/mock/fixtures.ts)). Try searching for
+*Rick Sanchez* (needs attention) or *Morty Smith* (great profile). To use a real tenant locally, set
+`MOCK_GRAPH=false` and provide a dev app registration through `AZURE_TENANT_ID` / `AZURE_CLIENT_ID` /
+`AZURE_CLIENT_SECRET`.
+
+| Script | Purpose |
+|---|---|
+| `npm run dev` | Watch-mode server (tsx), loads `.env` |
+| `npm test` | Vitest unit and API tests against mock Graph |
+| `npm run lint` / `npm run typecheck` | ESLint / TypeScript |
+| `npm run build` / `npm start` | Compile to `dist/` and run it |
+
+## AI-assisted investigation
+
+The [Have I Been Pwned MCP server](https://www.npmjs.com/package/@darrenjrobinson/hibp-mcp)
+(`@darrenjrobinson/hibp-mcp`) exposes the same HIBP lookups to AI assistants such as Claude, which can be
+useful when following up a finding from MS USER.
+
+## Licence
+
+[MIT](LICENSE)

@@ -1,0 +1,117 @@
+name: Deploy
+
+on:
+  push:
+    branches: [master]
+    paths-ignore: ['**.md', 'LICENSE']
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  package:
+    name: Package
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Production dependencies only
+        run: npm ci --omit=dev
+      - name: Create zip package
+        run: zip -qr app.zip dist public node_modules package.json package-lock.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app
+          path: app.zip
+          retention-days: 7
+
+  deploy:
+    name: Deploy to Azure
+    needs: package
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ steps.infra.outputs.webAppUrl }}
+    permissions:
+      contents: read
+      id-token: write # OIDC federated login – no Azure secrets stored in GitHub
+    env:
+      RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      APP_NAME: ${{ vars.APP_NAME }}
+      AUTH_CLIENT_ID: ${{ vars.AUTH_CLIENT_ID }}
+      HIBP_ENABLED: ${{ vars.HIBP_ENABLED || 'false' }}
+      APP_SKU: ${{ vars.APP_SKU || 'P0v3' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Preview infrastructure changes
+        run: |
+          az deployment group what-if \
+            --resource-group "$RESOURCE_GROUP" \
+            --template-file infra/main.bicep \
+            --parameters infra/main.bicepparam \
+            --result-format ResourceIdOnly
+
+      - name: Deploy infrastructure
+        id: infra
+        run: |
+          outputs=$(az deployment group create \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "msuser-${GITHUB_RUN_NUMBER}" \
+            --template-file infra/main.bicep \
+            --parameters infra/main.bicepparam \
+            --query properties.outputs -o json)
+          echo "webAppUrl=$(jq -r .webAppUrl.value <<<"$outputs")" >> "$GITHUB_OUTPUT"
+          echo "stagingUrl=$(jq -r .stagingUrl.value <<<"$outputs")" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: app
+
+      - name: Deploy to staging slot
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.APP_NAME }}
+          slot-name: staging
+          package: app.zip
+
+      - name: Smoke test staging
+        run: |
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "${{ steps.infra.outputs.stagingUrl }}/healthz" || true)
+            if [ "$code" = "200" ]; then echo "staging healthy"; exit 0; fi
+            echo "attempt $i: HTTP $code"; sleep 10
+          done
+          echo "::error::staging slot did not become healthy"; exit 1
+
+      - name: Swap staging into production
+        run: az webapp deployment slot swap --resource-group "$RESOURCE_GROUP" --name "$APP_NAME" --slot staging --target-slot production
+
+      - name: Verify production
+        run: |
+          for i in $(seq 1 12); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "${{ steps.infra.outputs.webAppUrl }}/healthz" || true)
+            if [ "$code" = "200" ]; then echo "production healthy"; exit 0; fi
+            sleep 10
+          done
+          echo "::error::production health check failed after swap – swap back with: az webapp deployment slot swap -g $RESOURCE_GROUP -n $APP_NAME --slot staging"; exit 1

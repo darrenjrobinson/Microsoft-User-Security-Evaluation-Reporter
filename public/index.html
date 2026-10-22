@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en" data-bs-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MS USER</title>
+  <meta name="description" content="Microsoft User Security Evaluation Reporter – evaluate and improve the security posture of your organisation's users.">
+  <meta name="author" content="Darren Robinson">
+  <meta name="color-scheme" content="light dark">
+  <!-- Applies the saved/system colour mode before first paint -->
+  <script src="/theme.js"></script>
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="/vendor/bootstrap/css/bootstrap.min.css">
+  <link rel="stylesheet" href="/vendor/bootstrap-icons/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <a class="visually-hidden-focusable" href="#main">Skip to content</a>
+
+  <nav class="navbar navbar-expand sticky-top border-bottom app-navbar">
+    <div class="container-xl">
+      <a class="navbar-brand d-flex align-items-center gap-2" href="/" aria-label="MS USER home">
+        <svg class="brand-mark" viewBox="0 0 22 22" aria-hidden="true">
+          <rect x="0" y="0" width="10" height="10" fill="#f25022"/>
+          <rect x="12" y="0" width="10" height="10" fill="#7fba00"/>
+          <rect x="0" y="12" width="10" height="10" fill="#00a4ef"/>
+          <rect x="12" y="12" width="10" height="10" fill="#ffb900"/>
+        </svg>
+        <span class="brand-text">U S E R</span>
+      </a>
+      <ul class="navbar-nav ms-auto align-items-center gap-1">
+        <li class="nav-item d-none d-sm-block">
+          <span class="nav-link text-body-secondary small" id="operatorName"><i class="bi bi-person-circle me-1" aria-hidden="true"></i><span>…</span></span>
+        </li>
+        <li class="nav-item d-none" id="mockBadge">
+          <span class="badge rounded-pill text-bg-warning" title="Serving canned demo data">Demo data</span>
+        </li>
+        <li class="nav-item dropdown">
+          <button class="btn btn-link nav-link dropdown-toggle d-flex align-items-center" id="themeToggle" type="button"
+                  data-bs-toggle="dropdown" aria-expanded="false" aria-label="Colour theme (system)">
+            <i class="bi bi-circle-half theme-icon-active" aria-hidden="true"></i>
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="themeToggle">
+            <li><button type="button" class="dropdown-item d-flex align-items-center" data-theme-value="light" aria-pressed="false">
+              <i class="bi bi-sun-fill me-2" aria-hidden="true"></i>Light<i class="bi bi-check2 ms-auto d-none" aria-hidden="true"></i></button></li>
+            <li><button type="button" class="dropdown-item d-flex align-items-center" data-theme-value="dark" aria-pressed="false">
+              <i class="bi bi-moon-stars-fill me-2" aria-hidden="true"></i>Dark<i class="bi bi-check2 ms-auto d-none" aria-hidden="true"></i></button></li>
+            <li><button type="button" class="dropdown-item d-flex align-items-center" data-theme-value="auto" aria-pressed="false">
+              <i class="bi bi-circle-half me-2" aria-hidden="true"></i>Follow system<i class="bi bi-check2 ms-auto d-none" aria-hidden="true"></i></button></li>
+          </ul>
+        </li>
+      </ul>
+    </div>
+  </nav>
+
+  <header class="hero text-center">
+    <div class="container-xl">
+      <p class="hero-eyebrow mb-2"><i class="bi bi-shield-lock me-1" aria-hidden="true"></i>Microsoft Entra ID · Microsoft Graph · Have I Been Pwned</p>
+      <h1 class="display-5 fw-semibold">User Security Evaluation Reporter</h1>
+      <p class="lead mb-0">How can we improve our security score and posture today?</p>
+    </div>
+  </header>
+
+  <main id="main" class="container-xl py-4">
+    <!-- Overview -->
+    <div class="row g-4">
+      <div class="col-lg-4">
+        <section class="card h-100 shadow-sm" aria-labelledby="howTitle">
+          <div class="card-body">
+            <div class="d-flex gap-2 mb-3" aria-hidden="true">
+              <span class="step">1</span><span class="step">2</span><span class="step">3</span>
+            </div>
+            <h2 class="h5 card-title" id="howTitle">Check out today's Secure Score</h2>
+            <p class="card-text text-body-secondary">It needs improvement, and we can do better.</p>
+            <ol class="text-body-secondary small ps-3 mb-0">
+              <li>Start by reviewing the latest <a href="#riskTitle">active risk events</a>.</li>
+              <li>Select <strong>Lookup</strong> on an event to evaluate that user's security posture: risk events, MFA methods, password exposure, sign-ins and password reset activity.</li>
+              <li>Use <a href="#searchTitle">Search for a user</a> to do the same for anyone in your organisation.</li>
+            </ol>
+          </div>
+        </section>
+      </div>
+      <div class="col-lg-4">
+        <section class="card h-100 shadow-sm" aria-labelledby="scoreTitle" aria-live="polite">
+          <div class="card-body">
+            <h2 class="h5 card-title d-flex align-items-center gap-2" id="scoreTitle">
+              <i class="bi bi-shield-check text-primary" aria-hidden="true"></i>Microsoft Secure Score
+            </h2>
+            <div id="secureScore">
+              <div class="d-flex align-items-center gap-4">
+                <div class="gauge skeleton" aria-hidden="true"></div>
+                <div class="flex-grow-1">
+                  <div class="skeleton skeleton-line w-75"></div>
+                  <div class="skeleton skeleton-line w-50"></div>
+                  <div class="skeleton skeleton-line w-25"></div>
+                </div>
+              </div>
+              <span class="visually-hidden">Loading today's Secure Score from Microsoft Graph…</span>
+            </div>
+          </div>
+        </section>
+      </div>
+      <div class="col-lg-4">
+        <section class="card h-100 shadow-sm" aria-labelledby="todoTitle">
+          <div class="card-body">
+            <h2 class="h5 card-title d-flex align-items-center gap-2" id="todoTitle">
+              <i class="bi bi-list-check text-primary" aria-hidden="true"></i>Help improve our Secure Score
+            </h2>
+            <ul class="list-unstyled todo mb-0">
+              <li><i class="bi bi-exclamation-triangle" aria-hidden="true"></i>Review the latest active risks</li>
+              <li><i class="bi bi-person-lock" aria-hidden="true"></i>Review users' MFA registration methods</li>
+              <li><i class="bi bi-activity" aria-hidden="true"></i>Review user risk events</li>
+              <li><i class="bi bi-incognito" aria-hidden="true"></i>Check password / breach exposure</li>
+              <li><i class="bi bi-box-arrow-in-right" aria-hidden="true"></i>Review sign-in activity</li>
+              <li><i class="bi bi-unlock" aria-hidden="true"></i>Review password reset activity</li>
+            </ul>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- Discovery: recent risks + search -->
+    <div id="discovery">
+      <section class="card shadow-sm mt-4" aria-labelledby="riskTitle">
+        <div class="card-header d-flex align-items-center gap-2">
+          <i class="bi bi-exclamation-octagon text-danger" aria-hidden="true"></i>
+          <h2 class="h6 mb-0" id="riskTitle">Recent active risk events</h2>
+          <span class="ms-auto small text-body-secondary">Last 30 days · Microsoft Entra ID Protection</span>
+        </div>
+        <div id="recentRisks" aria-live="polite">
+          <div class="p-3"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line w-75"></div></div>
+        </div>
+      </section>
+
+      <section class="card shadow-sm mt-4" aria-labelledby="searchTitle">
+        <div class="card-header d-flex align-items-center gap-2">
+          <i class="bi bi-people text-primary" aria-hidden="true"></i>
+          <h2 class="h6 mb-0" id="searchTitle">Search for a user</h2>
+        </div>
+        <div class="card-body">
+          <form id="searchForm" class="row g-2" role="search" autocomplete="off">
+            <div class="col-sm">
+              <label for="searchInput" class="visually-hidden">Name, UPN or email</label>
+              <div class="input-group">
+                <span class="input-group-text"><i class="bi bi-search" aria-hidden="true"></i></span>
+                <input id="searchInput" class="form-control" type="search" minlength="2" maxlength="64" required
+                       placeholder="Search for a user (e.g. Rick Sanchez)">
+              </div>
+            </div>
+            <div class="col-sm-auto">
+              <button class="btn btn-primary w-100" type="submit"><i class="bi bi-search me-1" aria-hidden="true"></i>Find</button>
+            </div>
+          </form>
+        </div>
+        <div id="searchResults" aria-live="polite"></div>
+      </section>
+    </div>
+
+    <!-- User drill-down -->
+    <section id="profile" class="mt-4" hidden aria-labelledby="profileName">
+      <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
+        <div class="avatar" id="profileAvatar" aria-hidden="true"></div>
+        <div class="me-auto">
+          <h2 class="h4 mb-0" id="profileName"></h2>
+          <div class="text-body-secondary small" id="profileUpn"></div>
+        </div>
+        <div id="profileBadges" class="d-flex flex-wrap gap-2"></div>
+        <button type="button" class="btn btn-outline-primary" id="newSearch"><i class="bi bi-arrow-counterclockwise me-1" aria-hidden="true"></i>New search</button>
+      </div>
+
+      <div id="profileLoading" class="card shadow-sm" hidden>
+        <div class="card-body d-flex align-items-center gap-3">
+          <div class="spinner-border text-primary" role="status" aria-hidden="true"></div>
+          <span>Retrieving the user's details…</span>
+        </div>
+      </div>
+
+      <div id="profileBody">
+        <!-- Overall verdict -->
+        <div class="card shadow-sm summary-card">
+          <div class="card-body row g-4 align-items-center">
+            <div class="col-md-4 text-center" id="overall"></div>
+            <div class="col-md-8">
+              <h3 class="h6 text-uppercase text-body-secondary mb-3">User security summary</h3>
+              <div id="summaryChecks" class="vstack gap-3"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Security checks -->
+        <div class="row g-4 mt-0">
+          <div class="col-lg-4">
+            <article class="card h-100 shadow-sm check-card">
+              <div class="card-body">
+                <h3 class="h5 card-title"><i class="bi bi-exclamation-diamond" aria-hidden="true"></i>Risk events</h3>
+                <p class="text-body-secondary small">This check looks for user risk events such as <strong>malware-linked IPs</strong>, <strong>anonymous IP</strong> (Tor/VPN) and <strong>atypical travel</strong>. Evaluate any risks in the context of the user, their position and other recent activity.</p>
+                <div class="stat" id="riskStat"></div>
+              </div>
+              <div class="card-footer bg-transparent border-0 pt-0 pb-3">
+                <button class="btn btn-sm btn-outline-secondary w-100" type="button" data-bs-toggle="collapse" data-bs-target="#riskDetails" aria-expanded="false" aria-controls="riskDetails"><i class="bi bi-chevron-down me-1" aria-hidden="true"></i>Risk event details</button>
+              </div>
+            </article>
+          </div>
+          <div class="col-lg-4">
+            <article class="card h-100 shadow-sm check-card">
+              <div class="card-body">
+                <h3 class="h5 card-title"><i class="bi bi-person-lock" aria-hidden="true"></i>Registered MFA methods</h3>
+                <p class="text-body-secondary small">This check lists the user's registered multifactor authentication methods. The preferred primary method is <strong>Microsoft Authenticator</strong> or a passkey. Text message (SMS) and voice should be <strong>avoided</strong> and used only where the user has no compatible device.</p>
+                <div class="stat" id="mfaStat"></div>
+              </div>
+              <div class="card-footer bg-transparent border-0 pt-0 pb-3">
+                <button class="btn btn-sm btn-outline-secondary w-100" type="button" data-bs-toggle="collapse" data-bs-target="#mfaDetails" aria-expanded="false" aria-controls="mfaDetails"><i class="bi bi-chevron-down me-1" aria-hidden="true"></i>MFA method details</button>
+              </div>
+            </article>
+          </div>
+          <div class="col-lg-4">
+            <article class="card h-100 shadow-sm check-card">
+              <div class="card-body">
+                <h3 class="h5 card-title d-flex align-items-center"><i class="bi bi-incognito" aria-hidden="true"></i>Pwned check
+                  <a class="ms-auto" href="https://haveibeenpwned.com/" target="_blank" rel="noopener"><img src="/images/HIBP-Logo-100px.png" alt="Have I Been Pwned" class="hibp-logo"></a></h3>
+                <p class="text-body-secondary small">This check looks up the user's email address in <strong>Have I Been Pwned</strong> breaches and pastes, alongside Entra ID Protection <strong>leaked credentials</strong> detections. If a password has been exposed it is <strong>strongly</strong> recommended the user changes it, to mitigate password spray and credential stuffing attacks.</p>
+                <div class="stat" id="pwnedStat"></div>
+              </div>
+              <div class="card-footer bg-transparent border-0 pt-0 pb-3">
+                <button class="btn btn-sm btn-outline-secondary w-100" type="button" data-bs-toggle="collapse" data-bs-target="#pwnedDetails" aria-expanded="false" aria-controls="pwnedDetails"><i class="bi bi-chevron-down me-1" aria-hidden="true"></i>Breach details</button>
+              </div>
+            </article>
+          </div>
+        </div>
+        <div class="collapse mt-3" id="riskDetails"><div class="card shadow-sm"><div class="card-header small fw-semibold">Risk events</div><div class="detail-body"></div></div></div>
+        <div class="collapse mt-3" id="mfaDetails"><div class="card shadow-sm"><div class="card-header small fw-semibold">MFA registration</div><div class="detail-body"></div></div></div>
+        <div class="collapse mt-3" id="pwnedDetails"><div class="card shadow-sm"><div class="card-header small fw-semibold">Have I Been Pwned</div><div class="detail-body"></div></div></div>
+
+        <h3 class="h5 mt-5 mb-3">Recent user activity and user details</h3>
+        <div class="row g-4">
+          <div class="col-lg-4">
+            <article class="card h-100 shadow-sm check-card">
+              <div class="card-body">
+                <h3 class="h5 card-title"><i class="bi bi-box-arrow-in-right" aria-hidden="true"></i>Recent sign-in activity</h3>
+                <p class="text-body-secondary small">Review recent sign-ins alongside risk events and password resets to spot unusual activity for the account. For Windows desktop sign-ins, a Microsoft Entra joined device is strongly recommended.</p>
+                <div class="stat" id="signInStat"></div>
+              </div>
+              <div class="card-footer bg-transparent border-0 pt-0 pb-3">
+                <button class="btn btn-sm btn-outline-secondary w-100" type="button" data-bs-toggle="collapse" data-bs-target="#signInDetails" aria-expanded="false" aria-controls="signInDetails"><i class="bi bi-chevron-down me-1" aria-hidden="true"></i>Sign-in details</button>
+              </div>
+            </article>
+          </div>
+          <div class="col-lg-4">
+            <article class="card h-100 shadow-sm check-card">
+              <div class="card-body">
+                <h3 class="h5 card-title"><i class="bi bi-unlock" aria-hidden="true"></i>Recent SSPR activity</h3>
+                <p class="text-body-secondary small">Self-service password reset activity for the user is shown here. Repeated unsuccessful attempts could indicate attempts to compromise the account. Review alongside the user's risk events.</p>
+                <div class="stat" id="ssprStat"></div>
+              </div>
+              <div class="card-footer bg-transparent border-0 pt-0 pb-3">
+                <button class="btn btn-sm btn-outline-secondary w-100" type="button" data-bs-toggle="collapse" data-bs-target="#ssprDetails" aria-expanded="false" aria-controls="ssprDetails"><i class="bi bi-chevron-down me-1" aria-hidden="true"></i>SSPR activity</button>
+              </div>
+            </article>
+          </div>
+          <div class="col-lg-4">
+            <article class="card h-100 shadow-sm check-card">
+              <div class="card-body">
+                <h3 class="h5 card-title"><i class="bi bi-person-vcard" aria-hidden="true"></i>User &amp; device details</h3>
+                <p class="text-body-secondary small">Account status, title, department, office, manager and on-premises identity, plus the user's Microsoft Entra registered and joined devices.</p>
+                <div class="stat" id="deviceStat"></div>
+              </div>
+              <div class="card-footer bg-transparent border-0 pt-0 pb-3">
+                <button class="btn btn-sm btn-outline-secondary w-100" type="button" data-bs-toggle="collapse" data-bs-target="#userDetails" aria-expanded="false" aria-controls="userDetails"><i class="bi bi-chevron-down me-1" aria-hidden="true"></i>Profile &amp; devices</button>
+              </div>
+            </article>
+          </div>
+        </div>
+        <div class="collapse mt-3" id="signInDetails"><div class="card shadow-sm"><div class="card-header small fw-semibold">Last 10 sign-ins (30 days)</div><div class="detail-body"></div></div></div>
+        <div class="collapse mt-3" id="ssprDetails"><div class="card shadow-sm"><div class="card-header small fw-semibold">Self-service password reset (30 days)</div><div class="detail-body"></div></div></div>
+        <div class="collapse mt-3" id="userDetails"><div class="card shadow-sm"><div class="card-header small fw-semibold">User profile &amp; devices</div><div class="detail-body"></div></div></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="app-footer mt-5">
+    <div class="container-xl py-4 text-center">
+      <nav class="d-flex justify-content-center gap-4 fs-4 mb-3" aria-label="Author links">
+        <a href="https://devpost.com/software/microsoft-user-security-evaluation-reporter" target="_blank" rel="noopener" aria-label="Devpost"><i class="bi bi-trophy"></i></a>
+        <a href="https://twitter.com/darrenjrobinson" target="_blank" rel="noopener" aria-label="X (Twitter)"><i class="bi bi-twitter-x"></i></a>
+        <a href="https://www.linkedin.com/in/darrenjrobinson/" target="_blank" rel="noopener" aria-label="LinkedIn"><i class="bi bi-linkedin"></i></a>
+        <a href="https://blog.darrenjrobinson.com" target="_blank" rel="noopener" aria-label="Blog"><i class="bi bi-wordpress"></i></a>
+        <a href="https://github.com/darrenjrobinson/Microsoft-User-Security-Evaluation-Reporter" target="_blank" rel="noopener" aria-label="GitHub"><i class="bi bi-github"></i></a>
+      </nav>
+      <p class="small mb-0">Hacked together for the Microsoft Security Graph Hackathon (Jan–Feb 2019) · rebuilt in 2026 · by
+        <a href="https://darrenjrobinson.com/" target="_blank" rel="noopener">darrenjrobinson.com</a></p>
+    </div>
+  </footer>
+
+  <div class="toast-container position-fixed bottom-0 end-0 p-3" id="toasts" aria-live="assertive" aria-atomic="true"></div>
+
+  <script src="/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
