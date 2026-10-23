@@ -1,4 +1,4 @@
-import type { GraphClient, GraphRequest, GraphResponse } from '../graph/client.js';
+import type { GraphClient, GraphRequest, GraphResponse, GraphVersion } from '../graph/client.js';
 import { toGraphError } from '../graph/client.js';
 import * as f from './fixtures.js';
 
@@ -12,13 +12,29 @@ function param(url: URL, name: string): string {
 /** Answers the fixed queries in graph/queries.ts from fixtures.ts. */
 export function route(path: string): GraphResponse {
   const url = new URL(path, 'https://graph.mock/v1.0/');
-  const p = url.pathname.replace(/^\/v1\.0/, '');
+  const p = url.pathname.replace(/^\/(v1\.0|beta)/, '');
+  const filter = param(url, '$filter');
+  const principal = /principalId eq '([^']+)'/.exec(filter)?.[1] ?? '';
   let m: RegExpMatchArray | null;
 
   if (p === '/security/secureScores') return list(f.secureScores);
 
+  if (p === '/roleManagement/directory/roleAssignmentScheduleInstances') return list(f.roleSchedules[principal] ?? []);
+  if (p === '/roleManagement/directory/roleAssignments') return list(f.roleAssignments[principal] ?? []);
+  if (p === '/roleManagement/directory/roleEligibilityScheduleInstances') return list(f.roleEligibilities[principal] ?? []);
+
+  if (p === '/policies/authenticationMethodsPolicy') return { status: 200, body: f.authMethodsPolicy };
+  if (p === '/policies/identitySecurityDefaultsEnforcementPolicy') return { status: 200, body: f.securityDefaults };
+
+  if ((m = p.match(/^\/users\/([^/]+)\/authentication\/methods$/))) return list(f.authMethods[m[1]!] ?? []);
+  if ((m = p.match(/^\/users\/([^/]+)\/ownedObjects$/))) return list(f.ownedObjects[m[1]!] ?? []);
+  if ((m = p.match(/^\/users\/([^/]+)\/sponsorOf$/))) return list(f.sponsorOf[m[1]!] ?? []);
+  if ((m = p.match(/^\/users\/([^/]+)\/memberOf$/))) return list(f.memberOf[m[1]!] ?? []);
+  if ((m = p.match(/^\/users\/([^/]+)\/transitiveMemberOf\/microsoft\.graph\.group$/))) {
+    return { status: 200, body: { '@odata.count': f.transitiveGroupCounts[m[1]!] ?? 0, value: [] } };
+  }
+
   if (p === '/identityProtection/riskDetections') {
-    const filter = param(url, '$filter');
     const byUser = /userId eq '([^']+)'/.exec(filter)?.[1];
     if (byUser) return list(f.riskDetections.filter((d) => d.userId === byUser));
     return list(f.riskDetections.filter((d) => d.riskState === 'atRisk'));
@@ -52,8 +68,11 @@ export function route(path: string): GraphResponse {
   }
 
   if (p === '/auditLogs/directoryAudits') {
-    const id = /t\/id eq '([^']+)'/.exec(param(url, '$filter'))?.[1] ?? '';
-    return list(f.ssprEvents[id] ?? []);
+    const target = /t\/id eq '([^']+)'/.exec(filter)?.[1] ?? '';
+    const initiator = /initiatedBy\/user\/id eq '([^']+)'/.exec(filter)?.[1] ?? '';
+    if (filter.includes("'Authentication Methods'")) return list(f.methodAudits[target] ?? []);
+    if (filter.includes("'Invite external user'")) return list(f.guestInvites[initiator] ?? []);
+    return list(f.ssprEvents[target] ?? []);
   }
 
   if ((m = p.match(/^\/reports\/authenticationMethods\/userRegistrationDetails\/([^/]+)$/))) {
@@ -74,9 +93,10 @@ export class MockGraphClient implements GraphClient {
     return res as GraphResponse<T>;
   }
 
-  async batch(requests: GraphRequest[]): Promise<Map<string, GraphResponse>> {
-    this.calls.push(...requests.map((r) => r.url));
-    return new Map(requests.map((r) => [r.id, route(r.url)]));
+  async batch(requests: GraphRequest[], opts: { version?: GraphVersion } = {}): Promise<Map<string, GraphResponse>> {
+    const prefix = opts.version === 'beta' ? '/beta' : '';
+    this.calls.push(...requests.map((r) => `${prefix}${r.url}`));
+    return new Map(requests.map((r) => [r.id, route(`${prefix}${r.url}`)]));
   }
 }
 

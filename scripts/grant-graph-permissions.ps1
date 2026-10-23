@@ -22,12 +22,16 @@ Set-StrictMode -Version Latest
 
 # Least-privilege application permissions for the queries in src/graph/queries.ts
 $permissions = @(
-  'User.Read.All',              # user search, profile, manager
-  'Directory.Read.All',         # registered devices
-  'AuditLog.Read.All',          # sign-ins, SSPR audit events, MFA registration details
-  'IdentityRiskEvent.Read.All', # risk detections
-  'IdentityRiskyUser.Read.All', # risky user state
-  'SecurityEvents.Read.All'     # Secure Score
+  'User.Read.All',                     # user search, profile, manager, licences, guests sponsored
+  'Directory.Read.All',                # registered devices, group/role/admin unit memberships, owned objects
+  'AuditLog.Read.All',                 # sign-ins (incl. beta authenticationDetails), SSPR, security info changes,
+                                       # guest invitations, MFA registration details
+  'IdentityRiskEvent.Read.All',        # risk detections
+  'IdentityRiskyUser.Read.All',        # risky user state
+  'SecurityEvents.Read.All',           # Secure Score
+  'UserAuthenticationMethod.Read.All', # per-user authentication method inventory
+  'RoleManagement.Read.Directory',     # Entra role assignments and PIM assignment / eligibility schedules
+  'Policy.Read.All'                    # authentication methods policy and security defaults (tenant context)
 )
 
 function Invoke-Az {

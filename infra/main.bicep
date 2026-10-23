@@ -15,6 +15,9 @@ param tenantId string = tenant().tenantId
 @description('Set true once the hibp-api-key secret exists in the Key Vault')
 param hibpEnabled bool = false
 
+@description('Optional tenant policy JSON (required-PIM roles, break-glass accounts, thresholds); see README')
+param policyJson string = ''
+
 @allowed([ 'P0v3', 'P1v3', 'P2v3', 'S1' ])
 @description('Plan SKU; must support deployment slots')
 param skuName string = 'P0v3'
@@ -51,6 +54,7 @@ module web 'modules/appService.bicep' = {
     authClientId: authClientId
     tenantId: tenantId
     hibpSecretUri: hibpEnabled ? hibpSecretUri : ''
+    policyJson: policyJson
   }
 }
 

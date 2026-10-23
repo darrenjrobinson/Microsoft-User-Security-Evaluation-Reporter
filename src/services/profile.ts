@@ -1,19 +1,54 @@
 import type { GraphClient, GraphResponse } from '../graph/client.js';
 import { queries } from '../graph/queries.js';
+import type { Policy } from '../policy.js';
 import {
+  assessAdminHygiene,
+  assessAuthStrength,
+  assessCaPosture,
+  assessCredentialChanges,
   assessDevices,
-  assessMfa,
+  assessGuestGovernance,
+  assessMembership,
+  assessMfaRegistration,
+  assessOwnership,
   assessPassword,
+  assessPimDrift,
+  assessPrivilege,
+  assessRecovery,
   assessRisk,
   assessSspr,
   overallOf,
+  withCredentialSignal,
   type Assessment,
   type MfaView,
   type RiskyUserView,
 } from './assessment.js';
+import {
+  buildAuthStrength,
+  buildRecovery,
+  observeSignIns,
+  toAuthMethod,
+  type AuthStrengthView,
+  type ObservedAuthView,
+  type RecoveryView,
+} from './authStrength.js';
+import { buildCaPosture, type CaPostureView } from './caPosture.js';
+import { buildCredentialChanges, type CredentialChangesView } from './credentialChanges.js';
 import type { HibpLookup, HibpView } from './hibp.js';
+import { buildIdentity, type IdentityView } from './identity.js';
+import { buildPrivilege, isPrivileged, type PrivilegeView } from './privilege.js';
+import {
+  buildGuests,
+  buildMembership,
+  buildOwnership,
+  inBreakGlassGroup,
+  type GuestGovernanceView,
+  type MembershipView,
+  type OwnershipView,
+} from './relationships.js';
 import { byNewest, toRiskView, type GraphRiskDetection, type RiskDetectionView } from './risk.js';
 import { isOk, ok, unavailableFrom, valueOf, type Section } from './section.js';
+import { createTenantContext, type TenantContextView } from './tenantContext.js';
 import { accountTypeOf, type AccountType } from './users.js';
 
 export interface UserDetailsView {
@@ -47,6 +82,7 @@ export interface DeviceView {
 }
 
 export interface SignInView {
+  id: string;
   createdDateTime: string;
   appDisplayName: string;
   ipAddress: string;
@@ -60,6 +96,8 @@ export interface SignInView {
   conditionalAccessStatus: string;
   authenticationRequirement: string;
   riskLevel: string;
+  /** Methods used, from beta authenticationDetails; empty when that evidence is unavailable */
+  authMethods: string[];
 }
 
 export interface SsprEventView {
@@ -71,14 +109,25 @@ export interface SsprEventView {
 
 export interface UserProfile {
   user: UserDetailsView;
+  identity: IdentityView;
   assessment: Assessment;
   riskDetections: Section<RiskDetectionView[]>;
   riskyUser: Section<RiskyUserView | null>;
   mfa: Section<MfaView | null>;
+  authStrength: Section<AuthStrengthView>;
+  recovery: Section<RecoveryView>;
+  privilege: Section<PrivilegeView>;
+  ownership: Section<OwnershipView>;
+  guests: Section<GuestGovernanceView>;
+  membership: Section<MembershipView>;
+  credentialChanges: Section<CredentialChangesView>;
+  caPosture: Section<CaPostureView>;
   hibp: Section<HibpView>;
   signIns: Section<SignInView[]>;
   sspr: Section<SsprEventView[]>;
   devices: Section<DeviceView[]>;
+  /** Tenant settings and licence gaps that explain this user's findings */
+  tenant: { context: Section<TenantContextView>; notes: string[] };
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- Graph payload shapes are mapped field by field below */
@@ -126,9 +175,10 @@ function toDevice(d: Any): DeviceView {
   };
 }
 
-function toSignIn(s: Any): SignInView {
+function toSignIn(s: Any, authMethods: string[] = []): SignInView {
   const loc = s.location ?? {};
   return {
+    id: str(s.id),
     createdDateTime: s.createdDateTime,
     appDisplayName: str(s.appDisplayName),
     ipAddress: str(s.ipAddress),
@@ -142,8 +192,14 @@ function toSignIn(s: Any): SignInView {
     conditionalAccessStatus: str(s.conditionalAccessStatus),
     authenticationRequirement: str(s.authenticationRequirement),
     riskLevel: str(s.riskLevelDuringSignIn),
+    authMethods,
   };
 }
+
+const stepMethods = (s: Any): string[] =>
+  Array.isArray(s.authenticationDetails)
+    ? [...new Set<string>(s.authenticationDetails.filter((d: Any) => d.succeeded !== false).map((d: Any) => str(d.authenticationMethod)).filter(Boolean))]
+    : [];
 
 function toSspr(a: Any): SsprEventView {
   return {
@@ -176,16 +232,45 @@ function section<T>(res: GraphResponse | undefined, map: (res: GraphResponse) =>
 
 export class UserNotFoundError extends Error {}
 
-export function createProfileService(graph: GraphClient, hibp: HibpLookup) {
+function tenantNotes(
+  context: Section<TenantContextView>,
+  sections: { authStrength: Section<AuthStrengthView>; privilege: Section<PrivilegeView>; risk: Section<unknown>; observed: Section<unknown> },
+): string[] {
+  const notes: string[] = [];
+  if (context.status === 'ok') {
+    const c = context.data;
+    if (c.methodsDisabled.includes('Passkeys (FIDO2)')) notes.push("Passkeys (FIDO2) are disabled in the authentication methods policy, so users can't register a phishing-resistant credential.");
+    const weak = c.methodsEnabled.filter((m) => m === 'SMS' || m === 'Voice call' || m === 'Email OTP');
+    const reliesOnWeak = sections.authStrength.status === 'ok' && ['phishable', 'none'].includes(sections.authStrength.data.verdict);
+    if (weak.length && reliesOnWeak) notes.push(`${weak.join(', ')} ${weak.length === 1 ? 'is' : 'are'} enabled tenant-wide as authentication methods.`);
+    if (c.securityDefaults) notes.push('Security defaults are on: Conditional Access and PIM controls are not in use.');
+  }
+  if (sections.privilege.status === 'ok' && !sections.privilege.data.pimDetail) {
+    notes.push('PIM schedules need Microsoft Entra ID P2 – role assignments are shown without eligibility or expiry.');
+  }
+  if (sections.risk.status === 'unavailable' && sections.risk.reason === 'notLicensed') notes.push('Risk detections need Microsoft Entra ID P2.');
+  if (sections.observed.status === 'unavailable') notes.push("Sign-in authentication details (Graph beta) are unavailable, so actual method usage can't be confirmed.");
+  return notes;
+}
+
+export function createProfileService(graph: GraphClient, hibp: HibpLookup, policy: Policy) {
+  const getTenantContext = createTenantContext(graph);
+
   return async function getUserProfile(userId: string): Promise<UserProfile> {
-    const responses = await graph.batch(queries.userProfileBatch(userId));
+    const [responses, beta, tenantContext] = await Promise.all([
+      graph.batch(queries.userProfileBatch(userId)),
+      // beta is the only source of per-sign-in authentication methods; failure just leaves usage unconfirmed
+      graph.batch(queries.userAuthSignInsBeta(userId), { version: 'beta' }).catch(() => new Map<string, GraphResponse>()),
+      getTenantContext().catch((): Section<TenantContextView> => ({ status: 'unavailable', reason: 'error', message: 'Tenant policies could not be read.' })),
+    ]);
     const userRes = responses.get('user');
     if (!userRes || !isOk(userRes)) {
       if (userRes?.status === 404) throw new UserNotFoundError(userId);
       const why = unavailableFrom(userRes);
       throw new Error(`Could not read user: ${why.message}`);
     }
-    const user = toUser(userRes.body);
+    const rawUser = userRes.body as Any;
+    const user = toUser(rawUser);
 
     const riskDetections = section(responses.get('riskDetections'), (r) =>
       valueOf<GraphRiskDetection>(r).sort(byNewest).map(toRiskView),
@@ -201,7 +286,15 @@ export function createProfileService(graph: GraphClient, hibp: HibpLookup) {
           });
     const mfaRes = responses.get('mfa');
     const mfa: Section<MfaView | null> = mfaRes?.status === 404 ? ok(null) : section(mfaRes, (r) => toMfa(r.body));
-    const signIns = section(responses.get('signIns'), (r) => valueOf(r).map(toSignIn));
+
+    // Sign-ins: the v1.0 panel query, enriched with beta authentication details where available
+    const betaRes = beta.get('authSignIns');
+    const betaSignIns: Any[] | null = isOk(betaRes) ? valueOf<Any>(betaRes!) : null;
+    const betaById = new Map((betaSignIns ?? []).map((s) => [str(s.id), s]));
+    const v1SignIns: Any[] | null = isOk(responses.get('signIns')) ? valueOf<Any>(responses.get('signIns')!) : null;
+    const signIns = section(responses.get('signIns'), (r) => valueOf<Any>(r).map((s) => toSignIn(s, stepMethods(betaById.get(str(s.id)) ?? {}))));
+    const observed: Section<ObservedAuthView> = betaSignIns ? ok(observeSignIns(betaSignIns)) : unavailableFrom(betaRes);
+
     const sspr = section(responses.get('sspr'), (r) =>
       valueOf<Any>(r)
         .map(toSspr)
@@ -209,29 +302,83 @@ export function createProfileService(graph: GraphClient, hibp: HibpLookup) {
     );
     const devices = section(responses.get('devices'), (r) => valueOf(r).map(toDevice));
 
+    const methodsRes = responses.get('authMethods');
+    const rawMethods: Any[] = isOk(methodsRes) ? valueOf<Any>(methodsRes!) : [];
+    const authMethods = section(methodsRes, () => rawMethods.map(toAuthMethod));
+    const authStrength = buildAuthStrength(mfa, authMethods, observed);
+    const recovery = buildRecovery(authMethods, rawMethods);
+
+    const privilege = buildPrivilege(
+      { schedules: responses.get('roleSchedules'), assignments: responses.get('roleAssignments'), eligibilities: responses.get('roleEligibilities') },
+      user.id,
+      policy,
+    );
+    const ownership = buildOwnership(responses.get('ownedObjects'), policy);
+    const guests = buildGuests(responses.get('sponsorOf'), responses.get('guestInvites'));
+    const membership = buildMembership(responses.get('memberOf'), responses.get('transitiveGroups'), policy);
+    const credentialChanges = buildCredentialChanges(
+      section(responses.get('methodAudits'), (r) => valueOf<Any>(r)),
+      authMethods,
+      riskDetections,
+      (betaSignIns ?? v1SignIns ?? []).map((s) => ({ createdDateTime: str(s.createdDateTime), riskLevel: str(s.riskLevelDuringSignIn) })),
+      user.id,
+    );
+    const caSource = betaSignIns ?? v1SignIns;
+    const caPosture: Section<CaPostureView> = caSource
+      ? ok(buildCaPosture(caSource, betaSignIns ? 'beta' : 'v1.0'))
+      : unavailableFrom(responses.get('signIns'));
+
+    const identity = buildIdentity({ ...user, raw: rawUser }, policy, {
+      isPrivileged: isPrivileged(privilege),
+      inBreakGlassGroup: inBreakGlassGroup(responses.get('memberOf'), policy),
+    });
+
     const account = user.mail || user.userPrincipalName;
     const hibpResult = await hibp(account).catch(
       (): Section<HibpView> => ({ status: 'unavailable', reason: 'error', message: 'Have I Been Pwned lookup failed.' }),
     );
 
-    const checks = {
-      risk: assessRisk(riskDetections, riskyUser),
+    const credentialCheck = assessCredentialChanges(credentialChanges, identity);
+    const weighted = {
+      mfa: assessMfaRegistration(mfa, identity),
+      authStrength: assessAuthStrength(authStrength, identity),
+      risk: withCredentialSignal(assessRisk(riskDetections, riskyUser), credentialCheck),
       password: assessPassword(hibpResult, riskDetections),
-      mfa: assessMfa(mfa, user.accountType),
+      privilege: assessPrivilege(privilege, identity),
+      guests: assessGuestGovernance(guests, identity, policy),
+      membership: assessMembership(membership, identity, policy),
+    };
+    const overlays = {
+      pimDrift: assessPimDrift(privilege),
+      ownership: assessOwnership(ownership),
+      recovery: assessRecovery(recovery, authStrength),
+      credentialChanges: credentialCheck,
+      adminHygiene: assessAdminHygiene(identity, authStrength, privilege, recovery),
+      caPosture: assessCaPosture(caPosture.status === 'ok' ? caPosture.data : null, identity),
       devices: assessDevices(devices),
       sspr: assessSspr(sspr),
     };
 
     return {
       user,
-      assessment: { ...checks, overall: overallOf(checks) },
+      identity,
+      assessment: { ...weighted, ...overlays, overall: overallOf(weighted) },
       riskDetections,
       riskyUser,
       mfa,
+      authStrength,
+      recovery,
+      privilege,
+      ownership,
+      guests,
+      membership,
+      credentialChanges,
+      caPosture,
       hibp: hibpResult,
       signIns,
       sspr,
       devices,
+      tenant: { context: tenantContext, notes: tenantNotes(tenantContext, { authStrength, privilege, risk: riskDetections, observed }) },
     };
   };
 }

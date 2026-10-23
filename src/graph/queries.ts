@@ -57,6 +57,7 @@ const USER_SELECT = [
   'onPremisesSecurityIdentifier',
   'onPremisesDistinguishedName',
   'onPremisesSamAccountName',
+  'assignedPlans',
 ].join(',');
 
 const SEARCH_SELECT = 'id,displayName,userPrincipalName,mail,department,jobTitle,userType,onPremisesSyncEnabled,accountEnabled';
@@ -124,6 +125,67 @@ export const queries = {
       },
       { id: 'riskyUser', method: 'GET', url: `/identityProtection/riskyUsers/${id}` },
       { id: 'mfa', method: 'GET', url: `/reports/authenticationMethods/userRegistrationDetails/${id}` },
+      { id: 'authMethods', method: 'GET', url: `/users/${id}/authentication/methods` },
+      // Active roles with PIM schedule detail (P2), the plain assignment list as a no-P2 fallback, then eligibilities
+      {
+        id: 'roleSchedules',
+        method: 'GET',
+        url: `/roleManagement/directory/roleAssignmentScheduleInstances?${q({ $filter: `principalId eq '${id}'`, $expand: 'roleDefinition' })}`,
+      },
+      {
+        id: 'roleAssignments',
+        method: 'GET',
+        url: `/roleManagement/directory/roleAssignments?${q({ $filter: `principalId eq '${id}'`, $expand: 'roleDefinition' })}`,
+      },
+      {
+        id: 'roleEligibilities',
+        method: 'GET',
+        url: `/roleManagement/directory/roleEligibilityScheduleInstances?${q({ $filter: `principalId eq '${id}'`, $expand: 'roleDefinition' })}`,
+      },
+      { id: 'ownedObjects', method: 'GET', url: `/users/${id}/ownedObjects?${q({ $top: '100' })}` },
+      { id: 'sponsorOf', method: 'GET', url: `/users/${id}/sponsorOf?${q({ $top: '100' })}` },
+      { id: 'memberOf', method: 'GET', url: `/users/${id}/memberOf?${q({ $top: '999' })}` },
+      {
+        id: 'transitiveGroups',
+        method: 'GET',
+        url: `/users/${id}/transitiveMemberOf/microsoft.graph.group?${q({ $count: 'true', $top: '1', $select: 'id' })}`,
+        headers: { ConsistencyLevel: 'eventual' },
+      },
+      {
+        id: 'methodAudits',
+        method: 'GET',
+        url: `/auditLogs/directoryAudits?${q({
+          $filter: `loggedByService eq 'Authentication Methods' and targetResources/any(t:t/id eq '${id}') and activityDateTime ge ${since}`,
+          $top: '50',
+        })}`,
+      },
+      {
+        id: 'guestInvites',
+        method: 'GET',
+        url: `/auditLogs/directoryAudits?${q({
+          $filter: `activityDisplayName eq 'Invite external user' and initiatedBy/user/id eq '${id}' and activityDateTime ge ${since}`,
+          $top: '100',
+        })}`,
+      },
     ];
   },
+
+  /** Sign-ins with authenticationDetails (beta only) – the evidence for which methods are actually used. */
+  userAuthSignInsBeta: (userId: string, now = new Date()): GraphRequest[] => {
+    const id = assertObjectId(userId);
+    const since = isoNoMillis(new Date(now.getTime() - ACTIVITY_WINDOW_DAYS * 86_400_000));
+    return [
+      {
+        id: 'authSignIns',
+        method: 'GET',
+        url: `/auditLogs/signIns?${q({ $filter: `userId eq '${id}' and createdDateTime ge ${since}`, $top: '50' })}`,
+      },
+    ];
+  },
+
+  /** Tenant-wide settings that explain a user's posture (cached by the caller). */
+  tenantPolicies: (): GraphRequest[] => [
+    { id: 'authMethodsPolicy', method: 'GET', url: '/policies/authenticationMethodsPolicy' },
+    { id: 'securityDefaults', method: 'GET', url: '/policies/identitySecurityDefaultsEnforcementPolicy' },
+  ],
 };

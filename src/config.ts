@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { parsePolicy, type Policy } from './policy.js';
 
 const bool = z
   .string()
@@ -16,9 +17,11 @@ const envSchema = z.object({
   HIBP_API_KEY: z.string().optional(),
   HIBP_USER_AGENT: z.string().default('MS-USER-Security-Evaluation-Reporter'),
   APPLICATIONINSIGHTS_CONNECTION_STRING: z.string().optional(),
+  // Tenant policy overlays (required-PIM roles, break-glass accounts, thresholds) – see src/policy.ts
+  POLICY_JSON: z.string().optional(),
 });
 
-export type Config = z.infer<typeof envSchema> & { hibpEnabled: boolean };
+export type Config = z.infer<typeof envSchema> & { hibpEnabled: boolean; policy: Policy };
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const parsed = envSchema.parse(env);
@@ -28,5 +31,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   return {
     ...parsed,
     hibpEnabled: parsed.MOCK_GRAPH || Boolean(parsed.HIBP_API_KEY),
+    policy: parsePolicy(parsed.POLICY_JSON),
   };
 }
