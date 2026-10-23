@@ -88,6 +88,7 @@ body {
   padding: 3rem 0 3.25rem;
 }
 .hero-eyebrow { font-size: 0.85rem; opacity: 0.85; letter-spacing: 0.02em; }
+.hero-hibp-logo { height: 14px; width: auto; vertical-align: -2px; filter: brightness(0) invert(1); }
 .hero .lead { opacity: 0.92; }
 
 /* Cards */
@@ -165,7 +166,7 @@ body {
   background: linear-gradient(135deg, var(--msu-hero-from), var(--msu-hero-to));
 }
 
-.hibp-logo { width: 28px; height: 28px; border-radius: 4px; }
+.hibp-logo { height: 22px; width: auto; }
 
 /* Tables */
 .table { --bs-table-bg: transparent; margin-bottom: 0; }
