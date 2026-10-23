@@ -71,6 +71,16 @@ if ($LASTEXITCODE -eq 0) {
   Write-Host "$AppName.azurewebsites.net is available"
 }
 
+# The deployment identity is scoped to the resource group, so it can't register providers itself
+Write-Step 'Registering resource providers'
+foreach ($ns in 'Microsoft.Web', 'Microsoft.KeyVault', 'Microsoft.Insights', 'Microsoft.OperationalInsights') {
+  $state = Invoke-Az provider show --namespace $ns --query registrationState -o tsv
+  if ($state -ne 'Registered') {
+    Invoke-Az provider register --namespace $ns --wait | Out-Null
+    Write-Host "Registered $ns"
+  }
+}
+
 Write-Step "Creating resource group $ResourceGroup ($Location)"
 Invoke-Az group create --name $ResourceGroup --location $Location --tags app=ms-user -o none
 $rgId = Invoke-Az group show --name $ResourceGroup --query id -o tsv
