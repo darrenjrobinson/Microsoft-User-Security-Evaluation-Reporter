@@ -33,7 +33,7 @@ jobs:
         run: npm ci --omit=dev
       - name: Create zip package
         run: zip -qr app.zip dist public node_modules package.json package-lock.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: app
           path: app.zip
