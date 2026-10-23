@@ -119,7 +119,7 @@ export function assessRecovery(recovery: Section<RecoveryView>, auth: Section<Au
   if (r.activeTap) return warning('A Temporary Access Pass is active');
   if (r.weakPaths.length === 0) return good('No weak recovery paths');
   const strong = auth.status === 'ok' && auth.data.phishingResistantRegistered;
-  return strong ? warning('Strong sign-in, but weaker recovery paths remain') : info(r.weakPaths.join(', '));
+  return strong ? warning('Strong sign-in, but weaker recovery paths remain') : info(plural(r.weakPaths.length, 'weak recovery path'));
 }
 
 export function assessPassword(hibp: Section<HibpView>, detections: Section<RiskDetectionView[]>): Check {
