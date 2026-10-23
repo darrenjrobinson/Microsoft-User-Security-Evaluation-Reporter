@@ -63,7 +63,15 @@ export function createApp(config: Config, deps: AppDeps = {}) {
   const staticOpts = { maxAge: config.NODE_ENV === 'production' ? '1h' : 0 };
   app.use('/vendor/bootstrap', express.static(path.join(ROOT, 'node_modules/bootstrap/dist'), staticOpts));
   app.use('/vendor/bootstrap-icons', express.static(path.join(ROOT, 'node_modules/bootstrap-icons/font'), staticOpts));
-  app.use(express.static(path.join(ROOT, 'public'), staticOpts));
+  // Our own HTML/CSS/JS change with every deploy and aren't fingerprinted, so make browsers revalidate them
+  app.use(
+    express.static(path.join(ROOT, 'public'), {
+      ...staticOpts,
+      setHeaders: (res, filePath) => {
+        if (/\.(html|css|js)$/.test(filePath)) res.setHeader('Cache-Control', 'no-cache');
+      },
+    }),
+  );
 
   app.use(
     '/api',
