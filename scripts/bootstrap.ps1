@@ -33,10 +33,20 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+# App Service host names are lowercase; keep redirect URIs and resource names consistent with them
+$AppName = $AppName.ToLowerInvariant()
+
+# On Windows `az` is a .cmd file, so arguments pass through cmd.exe – JMESPath characters such as
+# ( ) | & in --query break it. Filtering is therefore done in PowerShell on JSON output instead.
 function Invoke-Az {
   $out = & az @args
   if ($LASTEXITCODE -ne 0) { throw "az $($args -join ' ') failed" }
   return $out
+}
+
+function Invoke-AzJson {
+  $json = (Invoke-Az @args -o json) -join "`n"
+  if ($json) { return $json | ConvertFrom-Json } else { return $null }
 }
 
 function Write-Step($message) { Write-Host "`n==> $message" -ForegroundColor Cyan }
@@ -44,6 +54,22 @@ function Write-Step($message) { Write-Host "`n==> $message" -ForegroundColor Cya
 Write-Step "Selecting subscription $SubscriptionId"
 Invoke-Az account set --subscription $SubscriptionId | Out-Null
 $tenantId = Invoke-Az account show --query tenantId -o tsv
+
+Write-Step "Checking the Web App name '$AppName'"
+& az webapp show --resource-group $ResourceGroup --name $AppName -o none 2>$null
+if ($LASTEXITCODE -eq 0) {
+  Write-Host "$AppName already exists in $ResourceGroup"
+} else {
+  $check = New-TemporaryFile
+  @{ name = $AppName; type = 'Microsoft.Web/sites' } | ConvertTo-Json -Compress | Set-Content $check
+  $availability = Invoke-AzJson rest --method POST --body "@$check" `
+    --url "https://management.azure.com/subscriptions/$SubscriptionId/providers/Microsoft.Web/checknameavailability?api-version=2024-04-01"
+  Remove-Item $check
+  if (-not $availability.nameAvailable) {
+    throw "The Web App name '$AppName' is not available ($($availability.reason)). Choose another -AppName."
+  }
+  Write-Host "$AppName.azurewebsites.net is available"
+}
 
 Write-Step "Creating resource group $ResourceGroup ($Location)"
 Invoke-Az group create --name $ResourceGroup --location $Location --tags app=ms-user -o none
@@ -84,10 +110,11 @@ Invoke-Az ad sp update --id $authSpId --set appRoleAssignmentRequired=true | Out
 
 if (-not $SkipOperatorAssignment) {
   $me = Invoke-Az ad signed-in-user show --query id -o tsv
-  $roleId = Invoke-Az ad app show --id $authAppId --query "appRoles[?value=='MSUser.Operator'].id | [0]" -o tsv
-  $existing = Invoke-Az rest --method GET --url "https://graph.microsoft.com/v1.0/servicePrincipals/$authSpId/appRoleAssignedTo" `
-    --query "value[?principalId=='$me' && appRoleId=='$roleId'] | length(@)" -o tsv
-  if ($existing -eq '0') {
+  $roleId = (Invoke-AzJson ad app show --id $authAppId).appRoles |
+    Where-Object { $_.value -eq 'MSUser.Operator' } | Select-Object -First 1 -ExpandProperty id
+  $assigned = Invoke-AzJson rest --method GET --url "https://graph.microsoft.com/v1.0/servicePrincipals/$authSpId/appRoleAssignedTo"
+  $existing = @($assigned.value | Where-Object { $_.principalId -eq $me -and $_.appRoleId -eq $roleId })
+  if ($existing.Count -eq 0) {
     $body = @{ principalId = $me; resourceId = $authSpId; appRoleId = $roleId } | ConvertTo-Json -Compress
     $bodyFile = New-TemporaryFile
     Set-Content $bodyFile $body
@@ -110,8 +137,8 @@ $deploySpId = Invoke-Az ad sp list --filter "appId eq '$deployAppId'" --query '[
 if (-not $deploySpId) { $deploySpId = Invoke-Az ad sp create --id $deployAppId --query id -o tsv }
 
 $subject = "repo:${GitHubRepo}:environment:$GitHubEnvironment"
-$fics = Invoke-Az ad app federated-credential list --id $deployAppId --query "[?subject=='$subject'] | length(@)" -o tsv
-if ($fics -eq '0') {
+$fics = @(Invoke-AzJson ad app federated-credential list --id $deployAppId | Where-Object { $_.subject -eq $subject })
+if ($fics.Count -eq 0) {
   $fic = @{
     name      = "github-$GitHubEnvironment"
     issuer    = 'https://token.actions.githubusercontent.com'
@@ -126,8 +153,8 @@ if ($fics -eq '0') {
 }
 
 foreach ($role in 'Contributor', 'Role Based Access Control Administrator') {
-  $has = Invoke-Az role assignment list --assignee $deploySpId --scope $rgId --role $role --query 'length(@)' -o tsv
-  if ($has -eq '0') {
+  $has = @(Invoke-AzJson role assignment list --assignee $deploySpId --scope $rgId --role $role)
+  if ($has.Count -eq 0) {
     Invoke-Az role assignment create --assignee-object-id $deploySpId --assignee-principal-type ServicePrincipal `
       --role $role --scope $rgId -o none
     Write-Host "Granted $role on $ResourceGroup"
