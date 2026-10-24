@@ -243,7 +243,7 @@ function tenantNotes(
     if (c.methodsDisabled.includes('Passkeys (FIDO2)')) notes.push("Passkeys (FIDO2) are disabled in the authentication methods policy, so users can't register a phishing-resistant credential.");
     const weak = c.methodsEnabled.filter((m) => m === 'SMS' || m === 'Voice call' || m === 'Email OTP');
     const reliesOnWeak = sections.authStrength.status === 'ok' && ['phishable', 'none'].includes(sections.authStrength.data.verdict);
-    if (weak.length && reliesOnWeak) notes.push(`${weak.join(', ')} ${weak.length === 1 ? 'is' : 'are'} enabled tenant-wide as authentication methods.`);
+    if (weak.length && reliesOnWeak) notes.push(`${weak.join(', ')} ${weak.length === 1 ? 'is' : 'are'} enabled tenant-wide as ${weak.length === 1 ? 'an authentication method' : 'authentication methods'}.`);
     if (c.securityDefaults) notes.push('Security defaults are on: Conditional Access and PIM controls are not in use.');
   }
   if (sections.privilege.status === 'ok' && !sections.privilege.data.pimDetail) {

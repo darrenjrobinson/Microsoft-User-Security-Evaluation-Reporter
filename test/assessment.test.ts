@@ -116,7 +116,11 @@ describe('assessment', () => {
 
   it('grades privilege exposure by impact and permanence', () => {
     expect(assessPrivilege(privilege([]), identity()).level).toBe('good');
-    expect(assessPrivilege(privilege([role({})]), identity()).label).toBe('1 permanently active high-impact role');
+    expect(assessPrivilege(privilege([role({})]), identity()).label).toBe('1 permanently active high-impact role (Global Administrator)');
+    const reader = role({ roleName: 'Global Reader', impact: 'medium' });
+    expect(assessPrivilege(privilege([reader]), identity())).toMatchObject({ level: 'warning', label: '1 active medium-impact role (Global Reader)' });
+    const many = ['A', 'B', 'C', 'D'].map((n) => role({ roleName: `${n} Administrator`, state: 'eligible' }));
+    expect(assessPrivilege(privilege(many), identity()).label).toBe('4 high-impact roles through PIM or time-bound (A Administrator, B Administrator +2 more)');
     expect(assessPrivilege(privilege([role({ state: 'eligible' })]), identity()).level).toBe('warning');
     expect(assessPrivilege(privilege([role({ impact: 'low', state: 'permanentActive' })]), identity()).level).toBe('good');
     expect(assessPrivilege({ status: 'unavailable', reason: 'forbidden', message: '' }, identity()).level).toBe('unknown');
