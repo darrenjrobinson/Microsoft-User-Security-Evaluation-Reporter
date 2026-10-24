@@ -191,9 +191,17 @@ describe('API', () => {
       .get(`/api/users/${RICK}/profile`)
       .set('x-ms-client-principal', operator)
       .expect(200);
-    expect(res.body.context.signInActivity.data).toEqual({ lastSignIn: null, lastNonInteractiveSignIn: null, lastSuccessfulSignIn: null });
-    expect(res.body.context.directReports.data).toBe(0);
-    expect(res.body.membership.data.directGroups).toBe(0);
+    // Missing data is reported as unavailable – never as "none", "0" or "not registered"
+    const empty = { status: 'unavailable', reason: 'error', message: 'Microsoft Graph returned an empty response.' };
+    expect(res.body.context.signInActivity).toEqual(empty);
+    expect(res.body.context.directReports).toEqual(empty);
+    expect(res.body.membership).toEqual(empty);
+    expect(res.body.ownership.status).toBe('unavailable');
+    expect(res.body.assessment.mfa.level).toBe('unknown');
+    // An empty PIM schedule response falls back to plain role assignments rather than hiding Rick's roles
+    expect(res.body.privilege.data.pimDetail).toBe(false);
+    expect(res.body.privilege.data.assignments.map((r: { roleName: string }) => r.roleName)).toContain('Global Administrator');
+    expect(res.body.assessment.privilege.level).toBe('danger');
   });
 
   it('keeps the profile when new sections are forbidden, unlicensed or beta fails', async () => {

@@ -49,7 +49,7 @@ import {
   type OwnershipView,
 } from './relationships.js';
 import { byNewest, toRiskView, type GraphRiskDetection, type RiskDetectionView } from './risk.js';
-import { isOk, ok, unavailableFrom, valueOf, type Section } from './section.js';
+import { isList, isOk, ok, unavailableFrom, valueOf, type Section } from './section.js';
 import { createTenantContext, type TenantContextView } from './tenantContext.js';
 import { accountTypeOf, type AccountType } from './users.js';
 
@@ -240,7 +240,9 @@ function toSspr(a: Any): SsprEventView {
   };
 }
 
-function toMfa(m: Any): MfaView {
+/** null when the report row has no registration flag – missing data must not read as "not registered" */
+function toMfa(m: Any): MfaView | null {
+  if (typeof m?.isMfaRegistered !== 'boolean') return null;
   return {
     isMfaRegistered: !!m.isMfaRegistered,
     isMfaCapable: !!m.isMfaCapable,
@@ -259,6 +261,11 @@ function toMfa(m: Any): MfaView {
 function section<T>(res: GraphResponse | undefined, map: (res: GraphResponse) => T): Section<T> {
   // Mappers read properties off the body; never hand them null
   return res && isOk(res) ? ok(map({ ...res, body: res.body ?? {} })) : unavailableFrom(res);
+}
+
+/** For list endpoints: a 2xx without a `value` array is missing data, not an empty list. */
+function listSection<T>(res: GraphResponse | undefined, map: (items: Any[]) => T): Section<T> {
+  return isList(res) ? ok(map(valueOf<Any>(res!))) : unavailableFrom(res);
 }
 
 export class UserNotFoundError extends Error {}
@@ -292,7 +299,7 @@ const PAGED = ['ownedObjects', 'sponsorOf', 'memberOf', 'guestInvites', 'methodA
 /** Roles held through the role-assignable groups the user is a direct member of (they can't be nested). */
 async function groupRoles(graph: GraphClient, memberOf: { res: GraphResponse | undefined; complete: boolean }): Promise<{ results: GroupRoleResponses[]; gaps: string[] }> {
   const gaps: string[] = [];
-  if (!isOk(memberOf.res)) return { results: [], gaps: ["Roles held through role-assignable groups couldn't be checked: group memberships are unavailable."] };
+  if (!isList(memberOf.res)) return { results: [], gaps: ["Roles held through role-assignable groups couldn't be checked: group memberships are unavailable."] };
   if (!memberOf.complete) gaps.push('Group memberships were truncated, so roles held through some groups may be missing.');
   const groups = valueOf<Any>(memberOf.res!).filter((o) => o['@odata.type'] === '#microsoft.graph.group' && o.isAssignableToRole);
   const checked = groups.slice(0, MAX_ROLE_GROUPS);
@@ -344,9 +351,7 @@ export function createProfileService(graph: GraphClient, hibp: HibpLookup, polic
       hibp(account).catch((): Section<HibpView> => ({ status: 'unavailable', reason: 'error', message: 'Have I Been Pwned lookup failed.' })),
     ]);
 
-    const riskDetections = section(responses.get('riskDetections'), (r) =>
-      valueOf<GraphRiskDetection>(r).sort(byNewest).map(toRiskView),
-    );
+    const riskDetections = listSection(responses.get('riskDetections'), (items: GraphRiskDetection[]) => items.sort(byNewest).map(toRiskView));
     const riskyRes = responses.get('riskyUser');
     // Not being in riskyUsers just means the user has never been flagged
     const riskyUser: Section<RiskyUserView | null> =
@@ -354,6 +359,8 @@ export function createProfileService(graph: GraphClient, hibp: HibpLookup, polic
         ? ok(null)
         : section(riskyRes, (r) => {
             const b = r.body as Any;
+            // No risk state returned is the same as never having been flagged
+            if (!b.riskLevel && !b.riskState) return null;
             return { riskLevel: str(b.riskLevel), riskState: str(b.riskState), riskLastUpdatedDateTime: b.riskLastUpdatedDateTime ?? null };
           });
     const mfaRes = responses.get('mfa');
@@ -361,22 +368,18 @@ export function createProfileService(graph: GraphClient, hibp: HibpLookup, polic
 
     // Sign-ins: the v1.0 panel query, enriched with beta authentication details where available
     const betaRes = beta.get('authSignIns');
-    const betaSignIns: Any[] | null = isOk(betaRes) ? valueOf<Any>(betaRes!) : null;
+    const betaSignIns: Any[] | null = isList(betaRes) ? valueOf<Any>(betaRes!) : null;
     const betaById = new Map((betaSignIns ?? []).map((s) => [str(s.id), s]));
-    const v1SignIns: Any[] | null = isOk(responses.get('signIns')) ? valueOf<Any>(responses.get('signIns')!) : null;
-    const signIns = section(responses.get('signIns'), (r) => valueOf<Any>(r).map((s) => toSignIn(s, stepMethods(betaById.get(str(s.id)) ?? {}))));
+    const v1SignIns: Any[] | null = isList(responses.get('signIns')) ? valueOf<Any>(responses.get('signIns')!) : null;
+    const signIns = listSection(responses.get('signIns'), (items) => items.map((s) => toSignIn(s, stepMethods(betaById.get(str(s.id)) ?? {}))));
     const observed: Section<ObservedAuthView> = betaSignIns ? ok(observeSignIns(betaSignIns)) : unavailableFrom(betaRes);
 
-    const sspr = section(responses.get('sspr'), (r) =>
-      valueOf<Any>(r)
-        .map(toSspr)
-        .sort((a, b) => b.activityDateTime.localeCompare(a.activityDateTime)),
-    );
-    const devices = section(responses.get('devices'), (r) => valueOf(r).map(toDevice));
+    const sspr = listSection(responses.get('sspr'), (items) => items.map(toSspr).sort((a, b) => b.activityDateTime.localeCompare(a.activityDateTime)));
+    const devices = listSection(responses.get('devices'), (items) => items.map(toDevice));
 
     const methodsRes = responses.get('authMethods');
-    const rawMethods: Any[] = isOk(methodsRes) ? valueOf<Any>(methodsRes!) : [];
-    const authMethods = section(methodsRes, () => rawMethods.map(toAuthMethod));
+    const rawMethods: Any[] = isList(methodsRes) ? valueOf<Any>(methodsRes!) : [];
+    const authMethods = listSection(methodsRes, (items) => items.map(toAuthMethod));
     const authStrength = buildAuthStrength(mfa, authMethods, observed);
     const recovery = buildRecovery(authMethods, rawMethods);
 
@@ -390,7 +393,7 @@ export function createProfileService(graph: GraphClient, hibp: HibpLookup, polic
     const guests = buildGuests(sponsorOf!, guestInvites!);
     const membership = buildMembership(memberOf!, responses.get('transitiveGroups'), policy);
     const credentialChanges = buildCredentialChanges(
-      section(methodAudits!.res, (r) => valueOf<Any>(r)),
+      listSection(methodAudits!.res, (items) => items),
       authMethods,
       riskDetections,
       (betaSignIns ?? v1SignIns ?? []).map((s) => ({ createdDateTime: str(s.createdDateTime), riskLevel: str(s.riskLevelDuringSignIn) })),
@@ -429,17 +432,25 @@ export function createProfileService(graph: GraphClient, hibp: HibpLookup, polic
     };
 
     const context: UserContextView = {
-      signInActivity: section(responses.get('signInActivity'), (r) => {
-        const a = (r.body as Any)?.signInActivity ?? {};
-        return {
+      // The property must be present (null = never signed in); an empty body means Graph didn't return it
+      signInActivity: (() => {
+        const res = responses.get('signInActivity');
+        if (!isOk(res) || !res!.body || !('signInActivity' in (res!.body as Any))) return unavailableFrom(res);
+        const a = (res!.body as Any).signInActivity ?? {};
+        return ok({
           lastSignIn: a.lastSignInDateTime ?? null,
           lastNonInteractiveSignIn: a.lastNonInteractiveSignInDateTime ?? null,
           lastSuccessfulSignIn: a.lastSuccessfulSignInDateTime ?? null,
-        };
-      }),
+        });
+      })(),
       // From the user record, so it works with application permissions; names come from the cached SKU catalog
       licences: ok(licencesOf(rawUser, skuCatalog)),
-      directReports: section(responses.get('directReports'), (r) => Number((r.body as Any)?.['@odata.count'] ?? valueOf(r).length) || 0),
+      directReports: (() => {
+        const res = responses.get('directReports');
+        const n = Number((res?.body as Any)?.['@odata.count']);
+        if (isOk(res) && Number.isFinite(n)) return ok(n);
+        return isList(res) ? ok(valueOf(res!).length) : unavailableFrom(res);
+      })(),
     };
 
     return {

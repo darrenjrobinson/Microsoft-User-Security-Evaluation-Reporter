@@ -1,7 +1,7 @@
 import type { GraphResponse } from '../graph/client.js';
 import type { Paged } from '../graph/paging.js';
 import type { Policy } from '../policy.js';
-import { isOk, ok, unavailableFrom, valueOf, type Section } from './section.js';
+import { isList, ok, unavailableFrom, valueOf, type Section } from './section.js';
 
 // What else the user effectively controls or expands: objects they own, guests they bring in and sponsor,
 // and how far their group memberships reach.
@@ -71,7 +71,7 @@ function ownedKind(o: Any): OwnedKind {
 }
 
 export function buildOwnership({ res, complete }: Paged, policy: Policy): Section<OwnershipView> {
-  if (!isOk(res)) {
+  if (!isList(res)) {
     const why = unavailableFrom(res);
     // Graph documents /users/{id}/ownedObjects as delegated-only, so an app-only token may be refused
     return why.reason === 'forbidden'
@@ -92,10 +92,10 @@ export function buildOwnership({ res, complete }: Paged, policy: Policy): Sectio
 const succeeded = (a: Any) => !a.result || a.result === 'success';
 
 export function buildGuests(sponsorOf: Paged, invites: Paged): Section<GuestGovernanceView> {
-  if (!isOk(sponsorOf.res) && !isOk(invites.res)) return unavailableFrom(sponsorOf.res ?? invites.res);
+  if (!isList(sponsorOf.res) && !isList(invites.res)) return unavailableFrom(sponsorOf.res ?? invites.res);
   const gaps: string[] = [];
   let sponsored: GuestGovernanceView['sponsored'] = null;
-  if (isOk(sponsorOf.res)) {
+  if (isList(sponsorOf.res)) {
     sponsored = valueOf<Any>(sponsorOf.res!)
       .filter((o) => typeOf(o) === 'user')
       .map((u) => ({ id: str(u.id), displayName: str(u.displayName), userPrincipalName: str(u.userPrincipalName) }));
@@ -110,7 +110,7 @@ export function buildGuests(sponsorOf: Paged, invites: Paged): Section<GuestGove
     );
   }
   let inviteList: GuestGovernanceView['invites'] = null;
-  if (isOk(invites.res)) {
+  if (isList(invites.res)) {
     // A failed invitation didn't bring a guest in
     inviteList = valueOf<Any>(invites.res!)
       .filter(succeeded)
@@ -128,10 +128,10 @@ export function buildGuests(sponsorOf: Paged, invites: Paged): Section<GuestGove
 }
 
 export function buildMembership({ res: memberOf, complete }: Paged, transitive: GraphResponse | undefined, policy: Policy): Section<MembershipView> {
-  if (!isOk(memberOf)) return unavailableFrom(memberOf);
+  if (!isList(memberOf)) return unavailableFrom(memberOf);
   const items = valueOf<Any>(memberOf!);
   const groups = items.filter((o) => typeOf(o) === 'group');
-  const transitiveGroups = isOk(transitive) ? Number((transitive!.body as Any)?.['@odata.count']) : NaN;
+  const transitiveGroups = Number((transitive?.body as Any)?.['@odata.count'] ?? NaN);
   const named = (g: Any) => ({ id: str(g.id), displayName: str(g.displayName) || str(g.id) });
   const view: MembershipView = {
     directGroups: groups.length,
@@ -154,5 +154,5 @@ export function buildMembership({ res: memberOf, complete }: Paged, transitive: 
 /** Membership of any group listed in policy.breakGlassGroupIds */
 export const inBreakGlassGroup = (memberOf: GraphResponse | undefined, policy: Policy): boolean =>
   policy.breakGlassGroupIds.length > 0 &&
-  isOk(memberOf) &&
+  isList(memberOf) &&
   valueOf<Any>(memberOf!).some((o) => policy.breakGlassGroupIds.includes(str(o.id).toLowerCase()));

@@ -30,8 +30,9 @@ const isOk = (res: GraphResponse | undefined) => !!res && res.status >= 200 && r
 const nextLinkOf = (res: GraphResponse) => (res.body as { '@odata.nextLink'?: string } | null)?.['@odata.nextLink'];
 
 export async function allPages(graph: GraphClient, request: GraphRequest, first: GraphResponse | undefined): Promise<Paged> {
-  if (!isOk(first)) return { res: first, complete: true };
-  const body = (first!.body ?? {}) as { value?: unknown[]; '@odata.nextLink'?: string };
+  const body = (first?.body ?? {}) as { value?: unknown[]; '@odata.nextLink'?: string };
+  // Nothing to page: an error, or a 2xx without a list (callers report that as missing data)
+  if (!isOk(first) || !Array.isArray(body.value)) return { res: first, complete: true };
   const value = [...(body.value ?? [])];
   let link = body['@odata.nextLink'];
   let pages = 1;

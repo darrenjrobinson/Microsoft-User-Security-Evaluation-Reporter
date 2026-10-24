@@ -1,7 +1,7 @@
 import type { GraphResponse } from '../graph/client.js';
 import type { Policy } from '../policy.js';
 import { classifyRole, type Impact } from './roleCatalog.js';
-import { isOk, ok, unavailableFrom, valueOf, type Section } from './section.js';
+import { isList, ok, unavailableFrom, valueOf, type Section } from './section.js';
 
 // Privilege exposure: which Entra roles the user holds – directly or through a role-assignable group – whether
 // they're permanent or PIM-governed, and how much damage each could do. The "requires PIM" overlay is a separate
@@ -93,12 +93,12 @@ function collect(
   ctx: { policy: Policy; isException: boolean; groupName?: string; who: string },
 ): { ok: boolean; pimDetail: boolean; why?: ReturnType<typeof unavailableFrom> } {
   let pimDetail = true;
-  if (isOk(r.schedules)) {
+  if (isList(r.schedules)) {
     for (const a of valueOf<Any>(r.schedules!)) {
       const state: AssignmentState = a.assignmentType === 'Activated' ? 'activated' : a.endDateTime ? 'timeBoundActive' : 'permanentActive';
       out.push(toAssignment(a, state, ctx.policy, ctx.isException, ctx.groupName));
     }
-  } else if (isOk(r.assignments)) {
+  } else if (isList(r.assignments)) {
     // Without PIM there are no schedules: every assignment is permanent
     pimDetail = false;
     for (const a of valueOf<Any>(r.assignments!)) out.push(toAssignment(a, 'permanentActive', ctx.policy, ctx.isException, ctx.groupName));
@@ -106,7 +106,7 @@ function collect(
     return { ok: false, pimDetail: false, why: unavailableFrom(r.schedules ?? r.assignments) };
   }
 
-  if (isOk(r.eligibilities)) {
+  if (isList(r.eligibilities)) {
     for (const a of valueOf<Any>(r.eligibilities!)) out.push(toAssignment(a, 'eligible', ctx.policy, ctx.isException, ctx.groupName));
   } else {
     const why = unavailableFrom(r.eligibilities);

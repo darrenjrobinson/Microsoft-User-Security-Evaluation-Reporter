@@ -8,6 +8,7 @@ import { buildPrivilege } from '../src/services/privilege.js';
 import { createSkuCatalog, licencesOf, toLicence } from '../src/services/licences.js';
 import { createPhotoService } from '../src/services/photo.js';
 import { buildGuests } from '../src/services/relationships.js';
+import { createTenantContext } from '../src/services/tenantContext.js';
 import type { RiskDetectionView } from '../src/services/risk.js';
 import { ok } from '../src/services/section.js';
 
@@ -214,5 +215,32 @@ describe('licences', () => {
     expect(calls).toBe(1);
     const failing = { async get() { throw new Error('403'); } } as unknown as GraphClient;
     expect(await createSkuCatalog(failing)()).toBeNull();
+  });
+});
+
+describe('tenant context', () => {
+  const graphReturning = (bodies: Record<string, unknown>) => {
+    let calls = 0;
+    const graph = {
+      async batch() {
+        calls++;
+        return new Map(Object.entries(bodies).map(([id, body]) => [id, { status: 200, body }]));
+      },
+    } as unknown as GraphClient;
+    return { graph, calls: () => calls };
+  };
+
+  it('keeps security defaults unknown when isEnabled is missing, instead of reporting it off', async () => {
+    const { graph } = graphReturning({ authMethodsPolicy: { authenticationMethodConfigurations: [{ id: 'Fido2', state: 'enabled' }] }, securityDefaults: {} });
+    const ctx = await createTenantContext(graph)();
+    expect(ctx.status === 'ok' && ctx.data).toEqual({ methodsEnabled: ['Passkeys (FIDO2)'], methodsDisabled: [], securityDefaults: null });
+  });
+
+  it('reports empty policy responses as unavailable and does not cache them', async () => {
+    const { graph, calls } = graphReturning({ authMethodsPolicy: {}, securityDefaults: {} });
+    const getContext = createTenantContext(graph);
+    expect((await getContext()).status).toBe('unavailable');
+    await getContext();
+    expect(calls()).toBe(2);
   });
 });
