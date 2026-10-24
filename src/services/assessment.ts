@@ -78,6 +78,8 @@ export function assessRisk(detections: Section<RiskDetectionView[]>, riskyUser: 
     return danger('User risk events to review');
   }
   if (active > 0 || (user && ACTIVE_RISK_STATES.has(user.riskState))) return warning('User risk events to review');
+  // No active detections, but the user's own risk state couldn't be read: don't call that clean
+  if (riskyUser.status !== 'ok') return unknown('User risk state unavailable');
   return good('No active risk events found');
 }
 

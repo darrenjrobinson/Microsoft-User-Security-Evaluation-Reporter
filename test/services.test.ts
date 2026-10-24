@@ -148,6 +148,12 @@ describe('paging', () => {
     expect(graph.calls).toEqual([]);
   });
 
+  it('treats a continuation page without a list as missing data, not the last page', async () => {
+    const graph = fakeGraph({ [`/users/${USER}/memberOf?$top=999&$skiptoken=p2`]: { status: 200, body: {} } });
+    const paged = await allPages(graph, request, list([1], { '@odata.nextLink': next('p2') }));
+    expect(paged).toMatchObject({ complete: false, res: { body: { value: [1] } } });
+  });
+
   it('stops at a failed page and keeps what it has', async () => {
     const paged = await allPages(fakeGraph({}), request, list([1], { '@odata.nextLink': next('p2') }));
     expect(paged).toMatchObject({ complete: false, res: { body: { value: [1] } } });

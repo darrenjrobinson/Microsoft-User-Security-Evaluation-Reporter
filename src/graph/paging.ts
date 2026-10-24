@@ -41,7 +41,9 @@ export async function allPages(graph: GraphClient, request: GraphRequest, first:
     if (!next) break;
     try {
       const page = await graph.get<{ value?: unknown[]; '@odata.nextLink'?: string }>(next, request.headers);
-      value.push(...(page.body.value ?? []));
+      // A page without a list is missing data: stop, leaving `link` set so the result is marked incomplete
+      if (!Array.isArray(page.body?.value)) break;
+      value.push(...page.body.value);
       link = nextLinkOf(page);
       pages++;
     } catch {

@@ -354,13 +354,14 @@ export function createProfileService(graph: GraphClient, hibp: HibpLookup, polic
     const riskDetections = listSection(responses.get('riskDetections'), (items: GraphRiskDetection[]) => items.sort(byNewest).map(toRiskView));
     const riskyRes = responses.get('riskyUser');
     // Not being in riskyUsers just means the user has never been flagged
+    // Only a 404 means "never flagged"; a 2xx without a risk state is missing data, not a clean record
     const riskyUser: Section<RiskyUserView | null> =
       riskyRes?.status === 404
         ? ok(null)
-        : section(riskyRes, (r) => {
+        : !(riskyRes?.body as Any)?.riskState && !(riskyRes?.body as Any)?.riskLevel
+          ? unavailableFrom(riskyRes)
+          : section(riskyRes, (r) => {
             const b = r.body as Any;
-            // No risk state returned is the same as never having been flagged
-            if (!b.riskLevel && !b.riskState) return null;
             return { riskLevel: str(b.riskLevel), riskState: str(b.riskState), riskLastUpdatedDateTime: b.riskLastUpdatedDateTime ?? null };
           });
     const mfaRes = responses.get('mfa');

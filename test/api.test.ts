@@ -204,6 +204,24 @@ describe('API', () => {
     expect(res.body.assessment.privilege.level).toBe('danger');
   });
 
+  it('does not grade risk as clean when the risky-user lookup returns no data', async () => {
+    class EmptyRiskyUser extends MockGraphClient {
+      override async batch(requests: GraphRequest[], opts: { version?: GraphVersion } = {}) {
+        const responses = await super.batch(requests, opts);
+        if (responses.has('riskyUser')) responses.set('riskyUser', { status: 200, body: null });
+        return responses;
+      }
+    }
+    const config = loadConfig({ NODE_ENV: 'test', MOCK_GRAPH: 'true' });
+    // Morty has no active detections, so the risky-user state is what decides
+    const res = await request(createApp(config, { graph: new EmptyRiskyUser() }))
+      .get(`/api/users/${MORTY}/profile`)
+      .set('x-ms-client-principal', operator)
+      .expect(200);
+    expect(res.body.riskyUser.status).toBe('unavailable');
+    expect(res.body.assessment.risk).toMatchObject({ level: 'unknown', label: 'User risk state unavailable' });
+  });
+
   it('keeps the profile when new sections are forbidden, unlicensed or beta fails', async () => {
     class DegradedGraph extends MockGraphClient {
       override async batch(requests: GraphRequest[], opts: { version?: GraphVersion } = {}) {
