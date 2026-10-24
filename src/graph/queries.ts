@@ -58,6 +58,14 @@ const USER_SELECT = [
   'onPremisesDistinguishedName',
   'onPremisesSamAccountName',
   'assignedPlans',
+  'companyName',
+  'employeeType',
+  'employeeId',
+  'employeeHireDate',
+  'country',
+  'state',
+  'usageLocation',
+  'businessPhones',
 ].join(',');
 
 const SEARCH_SELECT = 'id,displayName,userPrincipalName,mail,department,jobTitle,userType,onPremisesSyncEnabled,accountEnabled';
@@ -98,7 +106,7 @@ export const queries = {
       {
         id: 'user',
         method: 'GET',
-        url: `/users/${id}?${q({ $select: USER_SELECT, $expand: 'manager($select=displayName,userPrincipalName)' })}`,
+        url: `/users/${id}?${q({ $select: USER_SELECT, $expand: 'manager($select=displayName,userPrincipalName,jobTitle,department)' })}`,
       },
       {
         id: 'devices',
@@ -167,7 +175,22 @@ export const queries = {
           $top: '100',
         })}`,
       },
+      // Separate from 'user': signInActivity needs Entra ID P1 and would otherwise fail the whole user read
+      { id: 'signInActivity', method: 'GET', url: `/users/${id}?${q({ $select: 'signInActivity' })}` },
+      { id: 'licenses', method: 'GET', url: `/users/${id}/licenseDetails?${q({ $select: 'skuId,skuPartNumber' })}` },
+      {
+        id: 'directReports',
+        method: 'GET',
+        url: `/users/${id}/directReports?${q({ $count: 'true', $top: '1', $select: 'id' })}`,
+        headers: { ConsistencyLevel: 'eventual' },
+      },
     ];
+  },
+
+  /** A fixed-size photo first; photos stored only in Entra can be any size, so fall back to the default one. */
+  userPhoto: (userId: string): string[] => {
+    const id = assertObjectId(userId);
+    return [`/users/${id}/photos/120x120/$value`, `/users/${id}/photo/$value`];
   },
 
   /**

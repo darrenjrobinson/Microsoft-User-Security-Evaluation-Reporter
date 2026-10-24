@@ -37,6 +37,7 @@ import { buildCaPosture, type CaPostureView } from './caPosture.js';
 import { buildCredentialChanges, type CredentialChangesView } from './credentialChanges.js';
 import type { HibpLookup, HibpView } from './hibp.js';
 import { buildIdentity, type IdentityView } from './identity.js';
+import { toLicence, type LicenceView } from './licences.js';
 import { buildPrivilege, isPrivileged, type GroupRoleResponses, type PrivilegeView } from './privilege.js';
 import {
   buildGuests,
@@ -65,6 +66,16 @@ export interface UserDetailsView {
   accountEnabled: boolean;
   accountType: AccountType;
   manager: string;
+  managerJobTitle: string;
+  managerUpn: string;
+  companyName: string;
+  employeeType: string;
+  employeeId: string;
+  employeeHireDate: string | null;
+  state: string;
+  country: string;
+  usageLocation: string;
+  businessPhones: string[];
   createdDateTime: string | null;
   lastPasswordChangeDateTime: string | null;
   onPremisesSamAccountName: string;
@@ -108,8 +119,16 @@ export interface SsprEventView {
   resultReason: string;
 }
 
+/** Who this person is in the organisation – context for reading the security findings */
+export interface UserContextView {
+  signInActivity: Section<{ lastSignIn: string | null; lastNonInteractiveSignIn: string | null; lastSuccessfulSignIn: string | null }>;
+  licences: Section<LicenceView[]>;
+  directReports: Section<number>;
+}
+
 export interface UserProfile {
   user: UserDetailsView;
+  context: UserContextView;
   identity: IdentityView;
   assessment: Assessment;
   riskDetections: Section<RiskDetectionView[]>;
@@ -156,6 +175,16 @@ function toUser(u: Any): UserDetailsView {
     accountEnabled: u.accountEnabled ?? true,
     accountType: accountTypeOf(u),
     manager: str(u.manager?.displayName),
+    managerJobTitle: str(u.manager?.jobTitle),
+    managerUpn: str(u.manager?.userPrincipalName),
+    companyName: str(u.companyName),
+    employeeType: str(u.employeeType),
+    employeeId: str(u.employeeId),
+    employeeHireDate: u.employeeHireDate ?? null,
+    state: str(u.state),
+    country: str(u.country),
+    usageLocation: str(u.usageLocation),
+    businessPhones: Array.isArray(u.businessPhones) ? u.businessPhones.filter((x: unknown) => typeof x === 'string') : [],
     createdDateTime: u.createdDateTime ?? null,
     lastPasswordChangeDateTime: u.lastPasswordChangeDateTime ?? null,
     onPremisesSamAccountName: str(u.onPremisesSamAccountName),
@@ -395,8 +424,22 @@ export function createProfileService(graph: GraphClient, hibp: HibpLookup, polic
       sspr: assessSspr(sspr),
     };
 
+    const context: UserContextView = {
+      signInActivity: section(responses.get('signInActivity'), (r) => {
+        const a = (r.body as Any).signInActivity ?? {};
+        return {
+          lastSignIn: a.lastSignInDateTime ?? null,
+          lastNonInteractiveSignIn: a.lastNonInteractiveSignInDateTime ?? null,
+          lastSuccessfulSignIn: a.lastSuccessfulSignInDateTime ?? null,
+        };
+      }),
+      licences: section(responses.get('licenses'), (r) => valueOf<Any>(r).map(toLicence).sort((a, b) => a.name.localeCompare(b.name))),
+      directReports: section(responses.get('directReports'), (r) => Number((r.body as Any)['@odata.count'] ?? valueOf(r).length) || 0),
+    };
+
     return {
       user,
+      context,
       identity,
       assessment: { ...weighted, ...overlays, overall: overallOf(weighted) },
       riskDetections,

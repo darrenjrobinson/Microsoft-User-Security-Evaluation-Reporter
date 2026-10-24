@@ -20,8 +20,16 @@ export interface GraphResponse<T = unknown> {
   body: T;
 }
 
+export interface GraphBinary {
+  status: number;
+  contentType: string;
+  body: Buffer;
+}
+
 export interface GraphClient {
   get<T>(url: string, headers?: Record<string, string>): Promise<GraphResponse<T>>;
+  /** Raw bytes (e.g. a photo); never throws for 4xx so callers can treat "no photo" as normal */
+  getBinary(url: string): Promise<GraphBinary>;
   /** Sends up to 20 requests as one JSON batch and returns the responses keyed by request id. */
   batch(requests: GraphRequest[], opts?: { version?: GraphVersion }): Promise<Map<string, GraphResponse>>;
 }
@@ -77,6 +85,15 @@ export class HttpGraphClient implements GraphClient {
     const res = await this.send('GET', url, headers);
     if (res.status >= 400) throw toGraphError(res);
     return res as GraphResponse<T>;
+  }
+
+  async getBinary(url: string): Promise<GraphBinary> {
+    const token = await this.credential.getToken(GRAPH_SCOPE);
+    if (!token) throw new GraphError(401, 'noToken', 'Could not acquire a Microsoft Graph token');
+    const res = await this.fetchImpl(`${GRAPH_HOST}/v1.0${url}`, { headers: { authorization: `Bearer ${token.token}` } });
+    const contentType = res.headers.get('content-type') ?? '';
+    const body = res.ok ? Buffer.from(await res.arrayBuffer()) : Buffer.alloc(0);
+    return { status: res.status, contentType, body };
   }
 
   async batch(requests: GraphRequest[], opts: { version?: GraphVersion } = {}): Promise<Map<string, GraphResponse>> {

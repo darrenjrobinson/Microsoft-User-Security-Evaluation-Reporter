@@ -10,6 +10,7 @@ import { MockGraphClient, mockHibpFetch } from './mock/mockGraph.js';
 import { parsePolicy } from './policy.js';
 import { apiRouter } from './routes/api.js';
 import { createHibpService, type HibpLookup } from './services/hibp.js';
+import { createPhotoService } from './services/photo.js';
 import { createProfileService } from './services/profile.js';
 import { createRiskService } from './services/risk.js';
 import { createSecureScoreService } from './services/secureScore.js';
@@ -86,6 +87,7 @@ export function createApp(config: Config, deps: AppDeps = {}) {
         getRecentRisks: createRiskService(graph),
         searchUsers: createUserSearchService(graph),
         getUserProfile: createProfileService(graph, hibp, policy),
+        getUserPhoto: createPhotoService(graph),
       },
       { hibpEnabled: config.hibpEnabled, mock: config.MOCK_GRAPH },
     ),

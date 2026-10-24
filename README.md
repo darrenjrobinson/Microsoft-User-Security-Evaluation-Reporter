@@ -32,7 +32,8 @@ detections**. Select **Lookup** on an event, or **search** for any user, to see 
 | Sign-ins | Last 10 sign-ins (30 days): app, result, methods used, location, device, Conditional Access, plus a CA summary | Sign-in logs |
 | Credential changes | Security info changes in 30 days, flagged when made by someone else or within 72 hours of risky activity | Audit logs + method inventory |
 | SSPR activity | Self-service password reset attempts and failure reasons (e.g. banned/fuzzy password) | Audit logs |
-| User & devices | Account status, title, department, manager, on-premises identity; registered vs Entra-joined devices | Users / devices |
+| Account & organisation | Who this person is, so the findings have context: photo, job title, department, location, manager, direct reports, employee type, licences (frontline F-SKUs flagged), last interactive / non-interactive sign-in, password age, on-premises identity | Users, licence details, `signInActivity` (needs Entra ID P1) |
+| Devices | Registered vs Entra-joined devices, compliance and management state | Devices |
 
 The **User security summary** combines these into a verdict using the original 2019 scoring, extended with
 the newer dimensions: *Awesome. Great profile*, *OK, but could be improved* or *Immediate attention required*,

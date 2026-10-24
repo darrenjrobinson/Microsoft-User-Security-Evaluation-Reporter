@@ -39,7 +39,15 @@ export const users = [
     lastPasswordChangeDateTime: daysAgo(210),
     // A licensed mailbox and Teams – the account he administers the tenant with is also his daily driver
     assignedPlans: plans('exchange', 'TeamspaceAPI', 'SharePoint'),
-    manager: { displayName: 'Beth Smith', userPrincipalName: 'beth.smith@contoso.example' },
+    companyName: 'Contoso',
+    employeeType: 'Employee',
+    employeeId: 'C-137',
+    employeeHireDate: '2019-01-28T00:00:00Z',
+    country: 'United States',
+    state: 'WA',
+    usageLocation: 'US',
+    businessPhones: ['+1 555 0101'],
+    manager: { displayName: 'Beth Smith', userPrincipalName: 'beth.smith@contoso.example', jobTitle: 'Head of Operations', department: 'Operations' },
   },
   {
     id: MORTY,
@@ -58,7 +66,12 @@ export const users = [
     onPremisesSyncEnabled: null,
     createdDateTime: '2021-06-01T10:00:00Z',
     lastPasswordChangeDateTime: daysAgo(12),
-    manager: { displayName: 'Rick Sanchez', userPrincipalName: 'rick.sanchez@contoso.example' },
+    companyName: 'Contoso',
+    employeeType: 'Intern',
+    employeeId: 'C-138',
+    country: 'United States',
+    usageLocation: 'US',
+    manager: { displayName: 'Rick Sanchez', userPrincipalName: 'rick.sanchez@contoso.example', jobTitle: 'Chief Scientist', department: 'Research & Development' },
   },
   {
     id: SUMMER,
@@ -92,6 +105,10 @@ export const users = [
     createdDateTime: '2019-01-23T00:44:00Z',
     lastPasswordChangeDateTime: daysAgo(400),
     assignedPlans: plans('exchange', 'TeamspaceAPI'),
+    companyName: 'Contoso',
+    employeeType: 'Employee',
+    country: 'United States',
+    usageLocation: 'US',
   },
   {
     id: BREAKGLASS,
@@ -597,3 +614,27 @@ export const mockPolicy = {
   pimExceptions: [BREAKGLASS],
   sensitiveGroupIds: [TIER0_GROUP, FINANCE_GROUP],
 };
+
+// ---------- Organisational context ----------
+
+// Tiny generated avatars (96x96 PNG); users without one fall back to initials
+export const photos: Record<string, string> = {
+  [RICK]: 'iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAIAAABt+uBvAAABIklEQVR42u3awXEDMQwDQHTgRt1i3mnDRbgAd+DEdxJ9onYGFeyPBHK7/8ibBAEgQIAAAQIECJAAAgQIECBAgAAJIECAtgH6fTzfZ1OgP10uIpVVdL5llFVovsWU5XSKjbKiTqVRFtUpMwJ0AaBJOjVGWVqnwAgQoCsDFejMNgIECBAgQIAAAQIECJBbDBCg/YB8FP2kAenFNKu6eeuOXdYd9kEWZjaKAggQIECAAAEC5NRwzfsoajXWbTXKatWpTOmhM88oPWjmMaWZznCj9NMZa5SWOgON0lVnlFEa6wwxSm+d80Zpr3PSKDvonDECNAdoOZ3DRtlH55gRoNFAS+scMAI0FKiBzqdGgACVAbXR+cgIEKAaoGY6/zcCBAjQVKAXQGCRaTRrFKIAAAAASUVORK5CYII=',
+  [MORTY]: 'iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAIAAABt+uBvAAABIklEQVR42u3awXEDMQwDQFTgil1bHinGRfjlDpz4TqJP1M6ggv2RQH7vN3mTIAAECBAgQIAAARJAgAABAgQIECABBAjQNkDPx8/7bAr0p8tFpLKKzreMsgrNt5iynE6xUVbUqTTKojplRoAuADRJp8YoS+sUGAECdGWgAp3ZRoAAAQIECBAgQIAAAXKLAQK0H5CPop80IL2YZlU3b92xy7rDPsjCzEZRAAECBAgQIECAnBqueR9Frca6rUZZrTqVKT105hmlB808pjTTGW6UfjpjjdJSZ6BRuuqMMkpjnSFG6a1z3ijtdU4aZQedM0aA5gAtp3PYKPvoHDMCNBpoaZ0DRoCGAjXQ+dQIEKAyoDY6HxkBAlQD1Ezn/0aAAAGaCvQCLHytkTniqQAAAAAASUVORK5CYII=',
+};
+
+const licence = (skuPartNumber: string) => ({ skuId: `sku-${skuPartNumber}`, skuPartNumber });
+export const licenceDetails: Record<string, unknown[]> = {
+  [RICK]: [licence('SPE_E5')],
+  [MORTY]: [licence('SPE_F1')],
+  [BETH]: [licence('SPE_E3'), licence('POWER_BI_PRO')],
+};
+
+export const signInActivity: Record<string, unknown> = {
+  [RICK]: { lastSignInDateTime: daysAgo(0, 8), lastNonInteractiveSignInDateTime: daysAgo(0, 11), lastSuccessfulSignInDateTime: daysAgo(0, 8) },
+  [MORTY]: { lastSignInDateTime: daysAgo(0, 9), lastNonInteractiveSignInDateTime: daysAgo(0, 10), lastSuccessfulSignInDateTime: daysAgo(0, 9) },
+  [BETH]: { lastSignInDateTime: daysAgo(3, 8), lastNonInteractiveSignInDateTime: daysAgo(1), lastSuccessfulSignInDateTime: daysAgo(3, 8) },
+  [BREAKGLASS]: { lastSignInDateTime: daysAgo(6), lastNonInteractiveSignInDateTime: null, lastSuccessfulSignInDateTime: daysAgo(6) },
+};
+
+export const directReportCounts: Record<string, number> = { [RICK]: 1, [BETH]: 2 };
