@@ -22,7 +22,7 @@ jobs:
     needs: ci
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
@@ -57,7 +57,7 @@ jobs:
       APP_SKU: ${{ vars.APP_SKU || 'P0v3' }}
       POLICY_JSON: ${{ vars.POLICY_JSON }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: azure/login@v2
         with:
