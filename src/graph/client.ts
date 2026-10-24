@@ -1,4 +1,4 @@
-import { DefaultAzureCredential, type TokenCredential } from '@azure/identity';
+import { DefaultAzureCredential, ManagedIdentityCredential, type TokenCredential } from '@azure/identity';
 
 const GRAPH_HOST = 'https://graph.microsoft.com';
 const GRAPH_SCOPE = 'https://graph.microsoft.com/.default';
@@ -34,6 +34,14 @@ export interface GraphClient {
   batch(requests: GraphRequest[], opts?: { version?: GraphVersion }): Promise<Map<string, GraphResponse>>;
 }
 
+/**
+ * App Service sets IDENTITY_ENDPOINT for the managed identity: use it directly rather than walking
+ * DefaultAzureCredential's chain, whose failed attempts (EnvironmentCredential…) are logged as exceptions.
+ */
+function defaultCredential(): TokenCredential {
+  return process.env.IDENTITY_ENDPOINT ? new ManagedIdentityCredential() : new DefaultAzureCredential();
+}
+
 export class GraphError extends Error {
   constructor(
     public readonly status: number,
@@ -52,7 +60,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export class HttpGraphClient implements GraphClient {
   constructor(
-    private readonly credential: TokenCredential = new DefaultAzureCredential(),
+    private readonly credential: TokenCredential = defaultCredential(),
     private readonly fetchImpl: typeof fetch = fetch,
   ) {}
 
@@ -76,7 +84,8 @@ export class HttpGraphClient implements GraphClient {
         await sleep(Math.min(retryAfter, 10) * 1000);
         continue;
       }
-      const json = res.status === 204 ? {} : await res.json().catch(() => ({}));
+      // A literal `null` body is valid JSON; normalise it so callers can always read properties
+      const json = res.status === 204 ? {} : ((await res.json().catch(() => ({}))) ?? {});
       return { status: res.status, body: json as unknown };
     }
   }
@@ -101,7 +110,8 @@ export class HttpGraphClient implements GraphClient {
     const res = await this.send('POST', '/$batch', {}, { requests }, opts.version);
     if (res.status >= 400) throw toGraphError(res);
     const responses = (res.body as { responses?: { id: string; status: number; body: unknown }[] }).responses ?? [];
-    return new Map(responses.map((r) => [r.id, { status: r.status, body: r.body }]));
+    // Graph can answer a batched request with a 2xx and no body (seen for $select=signInActivity)
+    return new Map(responses.map((r) => [r.id, { status: r.status, body: r.body ?? {} }]));
   }
 }
 

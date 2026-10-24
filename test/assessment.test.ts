@@ -216,6 +216,9 @@ describe('assessment', () => {
 
   it('grades risk by active detection count', () => {
     expect(assessRisk(ok([]), ok(null)).level).toBe('good');
+    // the user's own risk state couldn't be read: nothing found is not the same as clean
+    expect(assessRisk(ok([]), { status: 'unavailable', reason: 'error', message: '' })).toMatchObject({ level: 'unknown', label: 'User risk state unavailable' });
+    expect(assessRisk(ok([detection('atRisk')]), { status: 'unavailable', reason: 'error', message: '' }).level).toBe('warning');
     expect(assessRisk(ok([detection('remediated')]), ok(null)).level).toBe('good');
     expect(assessRisk(ok([detection('atRisk')]), ok(null)).level).toBe('warning');
     expect(assessRisk(ok(Array(4).fill(detection('atRisk'))), ok(null)).level).toBe('danger');

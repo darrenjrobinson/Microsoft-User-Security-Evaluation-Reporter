@@ -1,6 +1,6 @@
 import type { GraphClient } from '../graph/client.js';
 import { queries } from '../graph/queries.js';
-import { isOk, ok, unavailableFrom, type Section } from './section.js';
+import { ok, unavailableFrom, type Section } from './section.js';
 
 // Tenant-wide settings that explain a user's posture (e.g. "not passwordless because passkeys are disabled").
 // Lightweight context, not a tenant assessment. Same for every user, so it's cached.
@@ -37,16 +37,19 @@ export function createTenantContext(graph: GraphClient) {
     const responses = await graph.batch(queries.tenantPolicies());
     const methodsRes = responses.get('authMethodsPolicy');
     const defaultsRes = responses.get('securityDefaults');
+    // Only use what Graph actually returned: a missing property is unknown, never "disabled"
+    const configs: unknown = (methodsRes?.status === 200 ? (methodsRes.body as Any) : null)?.authenticationMethodConfigurations;
+    const isEnabled: unknown = (defaultsRes?.status === 200 ? (defaultsRes.body as Any) : null)?.isEnabled;
     let value: Section<TenantContextView>;
-    if (!isOk(methodsRes) && !isOk(defaultsRes)) {
+    if (!Array.isArray(configs) && typeof isEnabled !== 'boolean') {
       value = unavailableFrom(methodsRes);
     } else {
-      const configs: Any[] = isOk(methodsRes) ? ((methodsRes!.body as Any).authenticationMethodConfigurations ?? []) : [];
+      const list: Any[] = Array.isArray(configs) ? configs : [];
       const label = (c: Any) => METHOD_POLICY_LABELS[c.id] ?? String(c.id);
       value = ok({
-        methodsEnabled: configs.filter((c) => c.state === 'enabled').map(label),
-        methodsDisabled: configs.filter((c) => c.state !== 'enabled').map(label),
-        securityDefaults: isOk(defaultsRes) ? !!(defaultsRes!.body as Any).isEnabled : null,
+        methodsEnabled: list.filter((c) => c.state === 'enabled').map(label),
+        methodsDisabled: list.filter((c) => c.state !== 'enabled').map(label),
+        securityDefaults: typeof isEnabled === 'boolean' ? isEnabled : null,
       });
     }
     // Don't pin a transient failure for the whole TTL

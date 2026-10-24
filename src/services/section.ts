@@ -19,6 +19,8 @@ const LICENCE_CODES = new Set([
 
 export function unavailableFrom(res: GraphResponse | undefined): Unavailable {
   if (!res) return { status: 'unavailable', reason: 'error', message: 'No response from Microsoft Graph.' };
+  // Successful, but without the data we asked for – e.g. a 200 with no body, or a list with no `value`
+  if (isOk(res)) return { status: 'unavailable', reason: 'error', message: 'Microsoft Graph returned an empty response.' };
   const err = (res.body as { error?: { code?: string; message?: string } } | undefined)?.error;
   const code = err?.code ?? '';
   if (LICENCE_CODES.has(code) || /premium|licen[cs]e/i.test(err?.message ?? '')) {
@@ -42,4 +44,11 @@ export function unavailableFrom(res: GraphResponse | undefined): Unavailable {
 export const isOk = (res: GraphResponse | undefined): boolean =>
   !!res && res.status >= 200 && res.status < 300;
 
-export const valueOf = <T>(res: GraphResponse): T[] => (res.body as { value?: T[] }).value ?? [];
+export const valueOf = <T>(res: GraphResponse): T[] => (res.body as { value?: T[] } | null)?.value ?? [];
+
+/**
+ * A usable list response: 2xx *and* a `value` array. A 2xx with no body is missing data, not an empty list –
+ * treating it as empty would turn "unknown" into "no roles", "no risk events" and so on.
+ */
+export const isList = (res: GraphResponse | undefined): boolean =>
+  isOk(res) && Array.isArray((res!.body as { value?: unknown } | null)?.value);
