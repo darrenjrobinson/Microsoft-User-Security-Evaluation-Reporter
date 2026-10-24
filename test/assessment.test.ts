@@ -128,6 +128,9 @@ describe('assessment', () => {
     // what was found still counts
     expect(assessPrivilege(privilege([role({})], { gaps }), identity()).level).toBe('danger');
     expect(assessPimDrift(privilege([], { gaps })).level).toBe('unknown');
+    // no P2: an empty list with failed group-role discovery isn't "no roles" either
+    expect(assessPimDrift(privilege([], { gaps, pimDetail: false }))).toMatchObject({ level: 'unknown', label: 'Role inventory incomplete' });
+    expect(assessPimDrift(privilege([], { pimDetail: false })).level).toBe('good');
   });
 
   it('reports PIM drift as a separate overlay', () => {

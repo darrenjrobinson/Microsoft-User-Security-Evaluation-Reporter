@@ -149,7 +149,11 @@ export function assessPrivilege(privilege: Section<PrivilegeView>, identity: Ide
 export function assessPimDrift(privilege: Section<PrivilegeView>): Check {
   if (privilege.status !== 'ok') return unknown('Role assignments unavailable');
   const p = privilege.data;
-  if (!p.pimDetail) return p.assignments.length ? info('PIM not available – every role is permanently assigned') : good('No Entra roles assigned');
+  if (!p.pimDetail) {
+    if (p.assignments.length) return info('PIM not available – every role is permanently assigned');
+    // An empty list is only clear when every lookup (including group-held roles) succeeded
+    return p.gaps.length > 0 ? unknown('Role inventory incomplete') : good('No Entra roles assigned');
+  }
   const drift = p.assignments.filter((a) => a.pimDrift);
   if (drift.length > 0) return warning(`PIM required, but ${plural(drift.length, 'role')} actively assigned`);
   if (p.gaps.length > 0) return unknown('Role inventory incomplete');
