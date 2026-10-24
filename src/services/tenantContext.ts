@@ -41,12 +41,12 @@ export function createTenantContext(graph: GraphClient) {
     if (!isOk(methodsRes) && !isOk(defaultsRes)) {
       value = unavailableFrom(methodsRes);
     } else {
-      const configs: Any[] = isOk(methodsRes) ? ((methodsRes!.body as Any).authenticationMethodConfigurations ?? []) : [];
+      const configs: Any[] = isOk(methodsRes) ? ((methodsRes!.body as Any)?.authenticationMethodConfigurations ?? []) : [];
       const label = (c: Any) => METHOD_POLICY_LABELS[c.id] ?? String(c.id);
       value = ok({
         methodsEnabled: configs.filter((c) => c.state === 'enabled').map(label),
         methodsDisabled: configs.filter((c) => c.state !== 'enabled').map(label),
-        securityDefaults: isOk(defaultsRes) ? !!(defaultsRes!.body as Any).isEnabled : null,
+        securityDefaults: isOk(defaultsRes) ? !!(defaultsRes!.body as Any)?.isEnabled : null,
       });
     }
     // Don't pin a transient failure for the whole TTL

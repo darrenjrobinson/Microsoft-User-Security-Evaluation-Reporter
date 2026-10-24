@@ -257,7 +257,8 @@ function toMfa(m: Any): MfaView {
 }
 
 function section<T>(res: GraphResponse | undefined, map: (res: GraphResponse) => T): Section<T> {
-  return res && isOk(res) ? ok(map(res)) : unavailableFrom(res);
+  // Mappers read properties off the body; never hand them null
+  return res && isOk(res) ? ok(map({ ...res, body: res.body ?? {} })) : unavailableFrom(res);
 }
 
 export class UserNotFoundError extends Error {}
@@ -331,6 +332,7 @@ export function createProfileService(graph: GraphClient, hibp: HibpLookup, polic
       throw new Error(`Could not read user: ${why.message}`);
     }
     const rawUser = userRes.body as Any;
+    if (!rawUser?.id) throw new Error('Could not read user: Microsoft Graph returned an empty response.');
     const user = toUser(rawUser);
 
     const [owned, sponsorOf, memberOf, guestInvites, methodAudits] = await Promise.all(
@@ -428,7 +430,7 @@ export function createProfileService(graph: GraphClient, hibp: HibpLookup, polic
 
     const context: UserContextView = {
       signInActivity: section(responses.get('signInActivity'), (r) => {
-        const a = (r.body as Any).signInActivity ?? {};
+        const a = (r.body as Any)?.signInActivity ?? {};
         return {
           lastSignIn: a.lastSignInDateTime ?? null,
           lastNonInteractiveSignIn: a.lastNonInteractiveSignInDateTime ?? null,
@@ -437,7 +439,7 @@ export function createProfileService(graph: GraphClient, hibp: HibpLookup, polic
       }),
       // From the user record, so it works with application permissions; names come from the cached SKU catalog
       licences: ok(licencesOf(rawUser, skuCatalog)),
-      directReports: section(responses.get('directReports'), (r) => Number((r.body as Any)['@odata.count'] ?? valueOf(r).length) || 0),
+      directReports: section(responses.get('directReports'), (r) => Number((r.body as Any)?.['@odata.count'] ?? valueOf(r).length) || 0),
     };
 
     return {

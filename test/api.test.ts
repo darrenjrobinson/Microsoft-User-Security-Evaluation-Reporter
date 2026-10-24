@@ -176,6 +176,26 @@ describe('API', () => {
     expect(body.assessment.pimDrift.level).toBe('good');
   });
 
+  it('survives 2xx responses with no body (seen in production for signInActivity)', async () => {
+    class EmptyBodies extends MockGraphClient {
+      override async batch(requests: GraphRequest[], opts: { version?: GraphVersion } = {}) {
+        const responses = await super.batch(requests, opts);
+        for (const id of ['signInActivity', 'directReports', 'riskyUser', 'mfa', 'memberOf', 'ownedObjects', 'roleSchedules', 'authMethods']) {
+          if (responses.has(id)) responses.set(id, { status: 200, body: null });
+        }
+        return responses;
+      }
+    }
+    const config = loadConfig({ NODE_ENV: 'test', MOCK_GRAPH: 'true' });
+    const res = await request(createApp(config, { graph: new EmptyBodies() }))
+      .get(`/api/users/${RICK}/profile`)
+      .set('x-ms-client-principal', operator)
+      .expect(200);
+    expect(res.body.context.signInActivity.data).toEqual({ lastSignIn: null, lastNonInteractiveSignIn: null, lastSuccessfulSignIn: null });
+    expect(res.body.context.directReports.data).toBe(0);
+    expect(res.body.membership.data.directGroups).toBe(0);
+  });
+
   it('keeps the profile when new sections are forbidden, unlicensed or beta fails', async () => {
     class DegradedGraph extends MockGraphClient {
       override async batch(requests: GraphRequest[], opts: { version?: GraphVersion } = {}) {

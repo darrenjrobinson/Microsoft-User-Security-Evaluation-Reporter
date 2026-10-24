@@ -42,4 +42,4 @@ export function unavailableFrom(res: GraphResponse | undefined): Unavailable {
 export const isOk = (res: GraphResponse | undefined): boolean =>
   !!res && res.status >= 200 && res.status < 300;
 
-export const valueOf = <T>(res: GraphResponse): T[] => (res.body as { value?: T[] }).value ?? [];
+export const valueOf = <T>(res: GraphResponse): T[] => (res.body as { value?: T[] } | null)?.value ?? [];

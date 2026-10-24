@@ -27,11 +27,11 @@ export function continuationOf(nextLink: string, request: GraphRequest): string 
 }
 
 const isOk = (res: GraphResponse | undefined) => !!res && res.status >= 200 && res.status < 300;
-const nextLinkOf = (res: GraphResponse) => (res.body as { '@odata.nextLink'?: string })['@odata.nextLink'];
+const nextLinkOf = (res: GraphResponse) => (res.body as { '@odata.nextLink'?: string } | null)?.['@odata.nextLink'];
 
 export async function allPages(graph: GraphClient, request: GraphRequest, first: GraphResponse | undefined): Promise<Paged> {
   if (!isOk(first)) return { res: first, complete: true };
-  const body = first!.body as { value?: unknown[]; '@odata.nextLink'?: string };
+  const body = (first!.body ?? {}) as { value?: unknown[]; '@odata.nextLink'?: string };
   const value = [...(body.value ?? [])];
   let link = body['@odata.nextLink'];
   let pages = 1;
