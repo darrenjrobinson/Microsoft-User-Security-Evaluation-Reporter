@@ -37,7 +37,7 @@ import { buildCaPosture, type CaPostureView } from './caPosture.js';
 import { buildCredentialChanges, type CredentialChangesView } from './credentialChanges.js';
 import type { HibpLookup, HibpView } from './hibp.js';
 import { buildIdentity, type IdentityView } from './identity.js';
-import { toLicence, type LicenceView } from './licences.js';
+import { createSkuCatalog, licencesOf, type LicenceView } from './licences.js';
 import { buildPrivilege, isPrivileged, type GroupRoleResponses, type PrivilegeView } from './privilege.js';
 import {
   buildGuests,
@@ -313,14 +313,16 @@ async function groupRoles(graph: GraphClient, memberOf: { res: GraphResponse | u
 
 export function createProfileService(graph: GraphClient, hibp: HibpLookup, policy: Policy) {
   const getTenantContext = createTenantContext(graph);
+  const getSkuCatalog = createSkuCatalog(graph);
 
   return async function getUserProfile(userId: string): Promise<UserProfile> {
     const batch = queries.userProfileBatch(userId);
-    const [responses, beta, tenantContext] = await Promise.all([
+    const [responses, beta, tenantContext, skuCatalog] = await Promise.all([
       graph.batch(batch),
       // beta is the only source of per-sign-in authentication methods; failure just leaves usage unconfirmed
       graph.batch(queries.userAuthSignInsBeta(userId), { version: 'beta' }).catch(() => new Map<string, GraphResponse>()),
       getTenantContext().catch((): Section<TenantContextView> => ({ status: 'unavailable', reason: 'error', message: 'Tenant policies could not be read.' })),
+      getSkuCatalog(),
     ]);
     const userRes = responses.get('user');
     if (!userRes || !isOk(userRes)) {
@@ -433,7 +435,8 @@ export function createProfileService(graph: GraphClient, hibp: HibpLookup, polic
           lastSuccessfulSignIn: a.lastSuccessfulSignInDateTime ?? null,
         };
       }),
-      licences: section(responses.get('licenses'), (r) => valueOf<Any>(r).map(toLicence).sort((a, b) => a.name.localeCompare(b.name))),
+      // From the user record, so it works with application permissions; names come from the cached SKU catalog
+      licences: ok(licencesOf(rawUser, skuCatalog)),
       directReports: section(responses.get('directReports'), (r) => Number((r.body as Any)['@odata.count'] ?? valueOf(r).length) || 0),
     };
 

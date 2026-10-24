@@ -5,7 +5,7 @@ import { parsePolicy } from '../src/policy.js';
 import { buildAuthStrength, observeSignIns } from '../src/services/authStrength.js';
 import { buildCredentialChanges } from '../src/services/credentialChanges.js';
 import { buildPrivilege } from '../src/services/privilege.js';
-import { toLicence } from '../src/services/licences.js';
+import { createSkuCatalog, licencesOf, toLicence } from '../src/services/licences.js';
 import { createPhotoService } from '../src/services/photo.js';
 import { buildGuests } from '../src/services/relationships.js';
 import type { RiskDetectionView } from '../src/services/risk.js';
@@ -186,9 +186,33 @@ describe('photos', () => {
 
 describe('licences', () => {
   it('names common SKUs, flags frontline ones and passes unknown ones through', () => {
-    expect(toLicence({ skuPartNumber: 'SPE_E5' })).toEqual({ skuPartNumber: 'SPE_E5', name: 'Microsoft 365 E5', frontline: false });
-    expect(toLicence({ skuPartNumber: 'M365_F1_COMM' }).frontline).toBe(true);
-    expect(toLicence({ skuPartNumber: 'DESKLESSPACK' })).toMatchObject({ name: 'Office 365 F3', frontline: true });
-    expect(toLicence({ skuPartNumber: 'CONTOSO_CUSTOM' })).toEqual({ skuPartNumber: 'CONTOSO_CUSTOM', name: 'CONTOSO_CUSTOM', frontline: false });
+    expect(toLicence('id-1', 'SPE_E5')).toEqual({ skuId: 'id-1', skuPartNumber: 'SPE_E5', name: 'Microsoft 365 E5', frontline: false });
+    expect(toLicence('id-2', 'M365_F1_COMM').frontline).toBe(true);
+    expect(toLicence('id-3', 'DESKLESSPACK')).toMatchObject({ name: 'Office 365 F3', frontline: true });
+    expect(toLicence('id-4', 'CONTOSO_CUSTOM')).toMatchObject({ name: 'CONTOSO_CUSTOM', frontline: false });
+  });
+
+  it('resolves assignedLicenses through the SKU catalog and falls back to ids without it', () => {
+    const user = { assignedLicenses: [{ skuId: 'AAA' }, { skuId: 'bbb' }] };
+    const catalog = new Map([['aaa', 'SPE_E3']]);
+    expect(licencesOf(user, catalog).map((l) => l.name)).toEqual(['Microsoft 365 E3', 'Unrecognised licence (bbb)']);
+    expect(licencesOf(user, null).every((l) => l.name.startsWith('Unrecognised licence'))).toBe(true);
+    expect(licencesOf({}, catalog)).toEqual([]);
+  });
+
+  it('caches the SKU catalog and returns null when it cannot be read', async () => {
+    let calls = 0;
+    const graph = {
+      async get() {
+        calls++;
+        return { status: 200, body: { value: [{ skuId: 'AAA', skuPartNumber: 'SPE_E3' }] } };
+      },
+    } as unknown as GraphClient;
+    const getCatalog = createSkuCatalog(graph);
+    expect((await getCatalog())?.get('aaa')).toBe('SPE_E3');
+    await getCatalog();
+    expect(calls).toBe(1);
+    const failing = { async get() { throw new Error('403'); } } as unknown as GraphClient;
+    expect(await createSkuCatalog(failing)()).toBeNull();
   });
 });

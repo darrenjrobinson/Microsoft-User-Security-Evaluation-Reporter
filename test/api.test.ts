@@ -88,18 +88,22 @@ describe('API', () => {
     expect(res.body.signIns.data).toHaveLength(4);
     expect(res.body.signIns.data[0].authMethods).toEqual(['Password', 'Text message']);
     // + Rick is in one role-assignable group, so its roles are looked up in a follow-up batch
-    expect(graph.calls).toHaveLength(20 + 1 + 2 + 3);
+    // 19 batched + 1 beta + 2 tenant policies + the SKU catalog + Rick's role-assignable group (3)
+    expect(graph.calls).toHaveLength(19 + 1 + 2 + 1 + 3);
     expect(graph.calls.filter((c) => c.startsWith('/beta/'))).toEqual([expect.stringMatching(/^\/beta\/auditLogs\/signIns\?/)]);
 
-    // tenant policies are read once, not per profile
+    // tenant policies and the SKU catalog are read once, not per profile
     await request(a).get(`/api/users/${MORTY}/profile`).set('x-ms-client-principal', operator).expect(200);
     expect(graph.calls.filter((c) => c.startsWith('/policies/'))).toHaveLength(2);
+    expect(graph.calls.filter((c) => c.startsWith('/subscribedSkus'))).toHaveLength(1);
   });
 
   it('adds organisational context for reading the findings', async () => {
     const { body } = await get(`/api/users/${MORTY}/profile`).expect(200);
     expect(body.user).toMatchObject({ employeeType: 'Intern', managerJobTitle: 'Chief Scientist', companyName: 'Contoso' });
-    expect(body.context.licences.data).toEqual([{ skuPartNumber: 'SPE_F1', name: 'Microsoft 365 F3', frontline: true }]);
+    expect(body.context.licences.data).toEqual([
+      { skuId: '66b55226-6b4f-492c-910c-a3b7a3c9d993', skuPartNumber: 'SPE_F1', name: 'Microsoft 365 F3', frontline: true },
+    ]);
     expect(body.context.directReports.data).toBe(0);
     expect(body.context.signInActivity.data.lastSignIn).toBeTruthy();
     const rick = await get(`/api/users/${RICK}/profile`).expect(200);

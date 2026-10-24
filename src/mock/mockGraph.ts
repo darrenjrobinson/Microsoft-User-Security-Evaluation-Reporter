@@ -18,6 +18,7 @@ export function route(path: string): GraphResponse {
   let m: RegExpMatchArray | null;
 
   if (p === '/security/secureScores') return list(f.secureScores);
+  if (p === '/subscribedSkus') return list(f.subscribedSkus);
 
   if (p === '/roleManagement/directory/roleAssignmentScheduleInstances') return list(f.roleSchedules[principal] ?? []);
   if (p === '/roleManagement/directory/roleAssignments') return list(f.roleAssignments[principal] ?? []);
@@ -27,7 +28,6 @@ export function route(path: string): GraphResponse {
   if (p === '/policies/identitySecurityDefaultsEnforcementPolicy') return { status: 200, body: f.securityDefaults };
 
   if ((m = p.match(/^\/users\/([^/]+)\/authentication\/methods$/))) return list(f.authMethods[m[1]!] ?? []);
-  if ((m = p.match(/^\/users\/([^/]+)\/licenseDetails$/))) return list(f.licenceDetails[m[1]!] ?? []);
   if ((m = p.match(/^\/users\/([^/]+)\/directReports$/))) {
     return { status: 200, body: { '@odata.count': f.directReportCounts[m[1]!] ?? 0, value: [] } };
   }

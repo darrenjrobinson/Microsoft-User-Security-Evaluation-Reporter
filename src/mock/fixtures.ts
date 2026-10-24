@@ -13,6 +13,15 @@ export const SUMMER = '4f1c2c7a-0d2f-4b55-9b1e-0c5e2b9a7d11';
 export const BETH = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
 export const BREAKGLASS = 'c0ffee00-b6a5-4c1d-9e8f-000000000911';
 
+// Real SKU ids, so the demo resolves names the same way a tenant does (via subscribedSkus)
+const SKU = {
+  SPE_E5: '06ebc4ee-1bb5-47dd-8120-11324bc54e06',
+  SPE_E3: '05e9a617-0261-4cee-bb44-138d3ef5d965',
+  SPE_F1: '66b55226-6b4f-492c-910c-a3b7a3c9d993',
+  POWER_BI_PRO: 'f8a1db68-be16-40ed-86d5-cb42ce701560',
+};
+const licensed = (...skus: (keyof typeof SKU)[]) => skus.map((k) => ({ skuId: SKU[k], disabledPlans: [] }));
+
 const plans = (...services: string[]) =>
   services.map((service, i) => ({ assignedDateTime: '2024-01-01T00:00:00Z', capabilityStatus: 'Enabled', service, servicePlanId: `plan-${i}` }));
 
@@ -42,6 +51,7 @@ export const users = [
     companyName: 'Contoso',
     employeeType: 'Employee',
     employeeId: 'C-137',
+    assignedLicenses: licensed('SPE_E5'),
     employeeHireDate: '2019-01-28T00:00:00Z',
     country: 'United States',
     state: 'WA',
@@ -69,6 +79,7 @@ export const users = [
     companyName: 'Contoso',
     employeeType: 'Intern',
     employeeId: 'C-138',
+    assignedLicenses: licensed('SPE_F1'),
     country: 'United States',
     usageLocation: 'US',
     manager: { displayName: 'Rick Sanchez', userPrincipalName: 'rick.sanchez@contoso.example', jobTitle: 'Chief Scientist', department: 'Research & Development' },
@@ -105,6 +116,7 @@ export const users = [
     createdDateTime: '2019-01-23T00:44:00Z',
     lastPasswordChangeDateTime: daysAgo(400),
     assignedPlans: plans('exchange', 'TeamspaceAPI'),
+    assignedLicenses: licensed('SPE_E3', 'POWER_BI_PRO'),
     companyName: 'Contoso',
     employeeType: 'Employee',
     country: 'United States',
@@ -623,12 +635,7 @@ export const photos: Record<string, string> = {
   [MORTY]: 'iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAIAAABt+uBvAAABIklEQVR42u3awXEDMQwDQFTgil1bHinGRfjlDpz4TqJP1M6ggv2RQH7vN3mTIAAECBAgQIAAARJAgAABAgQIECABBAjQNkDPx8/7bAr0p8tFpLKKzreMsgrNt5iynE6xUVbUqTTKojplRoAuADRJp8YoS+sUGAECdGWgAp3ZRoAAAQIECBAgQIAAAXKLAQK0H5CPop80IL2YZlU3b92xy7rDPsjCzEZRAAECBAgQIECAnBqueR9Frca6rUZZrTqVKT105hmlB808pjTTGW6UfjpjjdJSZ6BRuuqMMkpjnSFG6a1z3ijtdU4aZQedM0aA5gAtp3PYKPvoHDMCNBpoaZ0DRoCGAjXQ+dQIEKAyoDY6HxkBAlQD1Ezn/0aAAAGaCvQCLHytkTniqQAAAAAASUVORK5CYII=',
 };
 
-const licence = (skuPartNumber: string) => ({ skuId: `sku-${skuPartNumber}`, skuPartNumber });
-export const licenceDetails: Record<string, unknown[]> = {
-  [RICK]: [licence('SPE_E5')],
-  [MORTY]: [licence('SPE_F1')],
-  [BETH]: [licence('SPE_E3'), licence('POWER_BI_PRO')],
-};
+export const subscribedSkus = Object.entries(SKU).map(([skuPartNumber, skuId]) => ({ skuId, skuPartNumber }));
 
 export const signInActivity: Record<string, unknown> = {
   [RICK]: { lastSignInDateTime: daysAgo(0, 8), lastNonInteractiveSignInDateTime: daysAgo(0, 11), lastSuccessfulSignInDateTime: daysAgo(0, 8) },

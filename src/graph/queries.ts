@@ -66,6 +66,7 @@ const USER_SELECT = [
   'state',
   'usageLocation',
   'businessPhones',
+  'assignedLicenses',
 ].join(',');
 
 const SEARCH_SELECT = 'id,displayName,userPrincipalName,mail,department,jobTitle,userType,onPremisesSyncEnabled,accountEnabled';
@@ -177,7 +178,6 @@ export const queries = {
       },
       // Separate from 'user': signInActivity needs Entra ID P1 and would otherwise fail the whole user read
       { id: 'signInActivity', method: 'GET', url: `/users/${id}?${q({ $select: 'signInActivity' })}` },
-      { id: 'licenses', method: 'GET', url: `/users/${id}/licenseDetails?${q({ $select: 'skuId,skuPartNumber' })}` },
       {
         id: 'directReports',
         method: 'GET',
@@ -220,6 +220,9 @@ export const queries = {
       },
     ];
   },
+
+  /** The tenant's licence catalog, to name a user's assignedLicenses (cached by the caller). */
+  subscribedSkus: (): string => `/subscribedSkus?${q({ $select: 'skuId,skuPartNumber' })}`,
 
   /** Tenant-wide settings that explain a user's posture (cached by the caller). */
   tenantPolicies: (): GraphRequest[] => [

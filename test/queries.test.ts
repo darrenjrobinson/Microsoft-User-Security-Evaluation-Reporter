@@ -51,7 +51,6 @@ describe('queries', () => {
       'methodAudits',
       'guestInvites',
       'signInActivity',
-      'licenses',
       'directReports',
     ]);
     expect(batch.length).toBeLessThanOrEqual(20);
@@ -81,6 +80,13 @@ describe('queries', () => {
     const byId = Object.fromEntries(queries.userProfileBatch(ID, now).map((r) => [r.id, r]));
     expect(param(byId.user!.url, '$select')).not.toContain('signInActivity');
     expect(param(byId.signInActivity!.url, '$select')).toBe('signInActivity');
+  });
+
+  it('reads licences from the user record, not the delegated-only licenseDetails endpoint', () => {
+    const batch = queries.userProfileBatch(ID, now);
+    expect(batch.some((r) => r.url.includes('licenseDetails'))).toBe(false);
+    expect(param(batch[0]!.url, '$select')).toContain('assignedLicenses');
+    expect(queries.subscribedSkus()).toBe('/subscribedSkus?$select=skuId%2CskuPartNumber');
   });
 
   it('builds photo URLs for an object id only', () => {
