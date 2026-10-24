@@ -1,4 +1,4 @@
-import type { GraphClient, GraphRequest, GraphResponse, GraphVersion } from '../graph/client.js';
+import type { GraphBinary, GraphClient, GraphRequest, GraphResponse, GraphVersion } from '../graph/client.js';
 import { toGraphError } from '../graph/client.js';
 import * as f from './fixtures.js';
 
@@ -18,6 +18,7 @@ export function route(path: string): GraphResponse {
   let m: RegExpMatchArray | null;
 
   if (p === '/security/secureScores') return list(f.secureScores);
+  if (p === '/subscribedSkus') return list(f.subscribedSkus);
 
   if (p === '/roleManagement/directory/roleAssignmentScheduleInstances') return list(f.roleSchedules[principal] ?? []);
   if (p === '/roleManagement/directory/roleAssignments') return list(f.roleAssignments[principal] ?? []);
@@ -27,6 +28,9 @@ export function route(path: string): GraphResponse {
   if (p === '/policies/identitySecurityDefaultsEnforcementPolicy') return { status: 200, body: f.securityDefaults };
 
   if ((m = p.match(/^\/users\/([^/]+)\/authentication\/methods$/))) return list(f.authMethods[m[1]!] ?? []);
+  if ((m = p.match(/^\/users\/([^/]+)\/directReports$/))) {
+    return { status: 200, body: { '@odata.count': f.directReportCounts[m[1]!] ?? 0, value: [] } };
+  }
   if ((m = p.match(/^\/users\/([^/]+)\/ownedObjects$/))) return list(f.ownedObjects[m[1]!] ?? []);
   if ((m = p.match(/^\/users\/([^/]+)\/sponsorOf$/))) return list(f.sponsorOf[m[1]!] ?? []);
   if ((m = p.match(/^\/users\/([^/]+)\/memberOf$/))) return list(f.memberOf[m[1]!] ?? []);
@@ -56,6 +60,10 @@ export function route(path: string): GraphResponse {
   }
 
   if ((m = p.match(/^\/users\/([^/]+)$/))) {
+    if (param(url, '$select') === 'signInActivity') {
+      const a = f.signInActivity[m[1]!];
+      return a ? { status: 200, body: { id: m[1], signInActivity: a } } : notFound;
+    }
     const u = f.users.find((x) => x.id === m![1]);
     return u ? { status: 200, body: u } : notFound;
   }
@@ -91,6 +99,16 @@ export class MockGraphClient implements GraphClient {
     const res = route(url);
     if (res.status >= 400) throw toGraphError(res);
     return res as GraphResponse<T>;
+  }
+
+  async getBinary(url: string): Promise<GraphBinary> {
+    this.calls.push(url);
+    // Only the fixed-size photo exists in the demo tenant, so the default-photo fallback is never needed
+    const id = /^\/users\/([^/]+)\/photos\/120x120\/\$value$/.exec(url)?.[1];
+    const photo = id ? f.photos[id] : undefined;
+    return photo
+      ? { status: 200, contentType: 'image/png', body: Buffer.from(photo, 'base64') }
+      : { status: 404, contentType: 'application/json', body: Buffer.alloc(0) };
   }
 
   async batch(requests: GraphRequest[], opts: { version?: GraphVersion } = {}): Promise<Map<string, GraphResponse>> {

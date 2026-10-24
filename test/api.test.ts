@@ -88,12 +88,36 @@ describe('API', () => {
     expect(res.body.signIns.data).toHaveLength(4);
     expect(res.body.signIns.data[0].authMethods).toEqual(['Password', 'Text message']);
     // + Rick is in one role-assignable group, so its roles are looked up in a follow-up batch
-    expect(graph.calls).toHaveLength(17 + 1 + 2 + 3);
+    // 19 batched + 1 beta + 2 tenant policies + the SKU catalog + Rick's role-assignable group (3)
+    expect(graph.calls).toHaveLength(19 + 1 + 2 + 1 + 3);
     expect(graph.calls.filter((c) => c.startsWith('/beta/'))).toEqual([expect.stringMatching(/^\/beta\/auditLogs\/signIns\?/)]);
 
-    // tenant policies are read once, not per profile
+    // tenant policies and the SKU catalog are read once, not per profile
     await request(a).get(`/api/users/${MORTY}/profile`).set('x-ms-client-principal', operator).expect(200);
     expect(graph.calls.filter((c) => c.startsWith('/policies/'))).toHaveLength(2);
+    expect(graph.calls.filter((c) => c.startsWith('/subscribedSkus'))).toHaveLength(1);
+  });
+
+  it('adds organisational context for reading the findings', async () => {
+    const { body } = await get(`/api/users/${MORTY}/profile`).expect(200);
+    expect(body.user).toMatchObject({ employeeType: 'Intern', managerJobTitle: 'Chief Scientist', companyName: 'Contoso' });
+    expect(body.context.licences.data).toEqual([
+      { skuId: '66b55226-6b4f-492c-910c-a3b7a3c9d993', skuPartNumber: 'SPE_F1', name: 'Microsoft 365 F3', frontline: true },
+    ]);
+    expect(body.context.directReports.data).toBe(0);
+    expect(body.context.signInActivity.data.lastSignIn).toBeTruthy();
+    const rick = await get(`/api/users/${RICK}/profile`).expect(200);
+    expect(rick.body.context.directReports.data).toBe(1);
+  });
+
+  it('serves profile photos as images, with a private cache and 404 when there is none', async () => {
+    const res = await get(`/api/users/${RICK}/photo`).expect(200);
+    expect(res.headers['content-type']).toBe('image/png');
+    expect(res.headers['cache-control']).toBe('private, max-age=3600');
+    expect(res.body.subarray(0, 4).toString('hex')).toBe('89504e47');
+    await get(`/api/users/${BETH}/photo`).expect(404);
+    await get('/api/users/not-an-id/photo').expect(400);
+    await request(app().app).get(`/api/users/${RICK}/photo`).expect(401);
   });
 
   it('explains a risky privileged account', async () => {

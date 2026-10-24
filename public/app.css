@@ -170,6 +170,10 @@ body {
   background: linear-gradient(135deg, var(--msu-hero-from), var(--msu-hero-to));
 }
 
+.avatar { position: relative; overflow: hidden; }
+/* The photo sits over the initials, which stay as the fallback */
+.avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+
 .hibp-logo { height: 22px; width: auto; }
 
 /* Tables */

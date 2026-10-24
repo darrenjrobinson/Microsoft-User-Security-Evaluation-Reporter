@@ -23,7 +23,8 @@ Set-StrictMode -Version Latest
 # Least-privilege application permissions for the queries in src/graph/queries.ts
 $permissions = @(
   'User.Read.All',                     # user search, profile, manager, licences, guests sponsored
-  'Directory.Read.All',                # registered devices, group/role/admin unit memberships, owned objects
+  'Directory.Read.All',                # registered devices, group/role/admin unit memberships, owned objects,
+                                       # licence names (subscribedSkus)
   'AuditLog.Read.All',                 # sign-ins (incl. beta authenticationDetails), SSPR, security info changes,
                                        # guest invitations, MFA registration details
   'IdentityRiskEvent.Read.All',        # risk detections

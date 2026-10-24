@@ -2,6 +2,7 @@ import { Router, type NextFunction, type Request, type Response } from 'express'
 import { z } from 'zod';
 import { isObjectId } from '../graph/queries.js';
 import { UserNotFoundError, type createProfileService } from '../services/profile.js';
+import type { createPhotoService } from '../services/photo.js';
 import type { createRiskService } from '../services/risk.js';
 import type { createSecureScoreService } from '../services/secureScore.js';
 import type { createUserSearchService } from '../services/users.js';
@@ -11,6 +12,7 @@ export interface ApiServices {
   getRecentRisks: ReturnType<typeof createRiskService>;
   searchUsers: ReturnType<typeof createUserSearchService>;
   getUserProfile: ReturnType<typeof createProfileService>;
+  getUserPhoto: ReturnType<typeof createPhotoService>;
 }
 
 const searchQuery = z.object({
@@ -69,6 +71,19 @@ export function apiRouter(services: ApiServices, info: { hibpEnabled: boolean; m
         if (err instanceof UserNotFoundError) return res.status(404).json({ error: 'notFound', message: 'User not found' });
         throw err;
       }
+    }),
+  );
+
+  router.get(
+    '/users/:id/photo',
+    wrap(async (req, res) => {
+      const id = String(req.params.id);
+      if (!isObjectId(id)) return res.status(400).json({ error: 'badRequest', message: 'A user object id is required' });
+      const photo = await services.getUserPhoto(id);
+      // No photo is normal – the UI shows initials instead
+      if (!photo) return res.status(404).json({ error: 'notFound', message: 'No photo' });
+      // Photos rarely change; let this operator's browser reuse it for an hour, but never a shared cache
+      return res.set({ 'Cache-Control': 'private, max-age=3600', 'Content-Type': photo.contentType }).send(photo.body);
     }),
   );
 

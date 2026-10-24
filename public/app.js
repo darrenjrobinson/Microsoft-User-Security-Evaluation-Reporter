@@ -29,6 +29,17 @@ const dayFmt = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' });
 const fmtDate = (iso) => (iso ? dateFmt.format(new Date(iso)) : '—');
 const fmtDay = (iso) => (iso ? dayFmt.format(new Date(iso)) : '—');
 const dash = (v) => (v === undefined || v === null || v === '' ? '—' : v);
+const relFmt = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+/** "3 days ago" / "2 months ago" alongside an absolute date */
+function fmtAgo(iso) {
+  if (!iso) return '';
+  const days = Math.round((Date.parse(iso) - Date.now()) / 86_400_000);
+  if (Math.abs(days) < 1) return relFmt.format(0, 'day');
+  if (Math.abs(days) < 60) return relFmt.format(days, 'day');
+  if (Math.abs(days) < 730) return relFmt.format(Math.round(days / 30), 'month');
+  return relFmt.format(Math.round(days / 365), 'year');
+}
+const withAgo = (iso) => (iso ? h('span', {}, fmtDate(iso), h('span', { class: 'text-body-secondary' }, ` · ${fmtAgo(iso)}`)) : '—');
 const yesNo = (v) => (v === null || v === undefined ? '—' : v ? 'Yes' : 'No');
 
 const LEVEL_ICONS = {
@@ -622,6 +633,118 @@ function identityBadges(u, identity) {
   ].filter(Boolean);
 }
 
+/** Initials first; the photo replaces them only once it has actually loaded (404 = no photo, keep initials) */
+function renderAvatar(u, initials) {
+  const avatar = $('#profileAvatar');
+  const img = h('img', { alt: '', hidden: true, src: `/api/users/${encodeURIComponent(u.id)}/photo` });
+  img.addEventListener('load', () => (img.hidden = false));
+  img.addEventListener('error', () => img.remove());
+  avatar.replaceChildren(document.createTextNode(initials || '?'), img);
+}
+
+/** "Job title · Department · City, Country" plus quick context cues and the details toggle */
+function renderRoleLine(p) {
+  const u = p.user;
+  const where = [u.officeLocation, [u.city, u.country].filter(Boolean).join(', ')].filter(Boolean).join(' · ');
+  const line = [u.jobTitle, u.department, where].filter(Boolean).join(' · ');
+  $('#profileRole').replaceChildren(line ? h('span', {}, line) : h('span', { class: 'text-body-secondary' }, 'No job title or department recorded'));
+
+  const reports = p.context.directReports;
+  const frontline = p.context.licences.status === 'ok' && p.context.licences.data.some((l) => l.frontline);
+  const chip = (iconName, text) => h('span', { class: 'badge rounded-pill bg-body-tertiary text-body border fw-normal' }, icon(iconName, 'me-1'), text);
+  $('#profileContext').replaceChildren(
+    ...[
+      u.employeeType ? chip('person-badge', u.employeeType) : null,
+      reports.status === 'ok' && reports.data > 0 ? chip('diagram-3', `Manages ${reports.data} ${reports.data === 1 ? 'person' : 'people'}`) : null,
+      frontline ? chip('shop', 'Frontline licence') : null,
+      p.identity.licensedWorkloads.length ? chip('envelope', p.identity.licensedWorkloads.join(' · ')) : null,
+    ].filter(Boolean),
+    h(
+      'button',
+      {
+        type: 'button',
+        class: 'btn btn-link btn-sm p-0 ms-1',
+        'data-bs-toggle': 'collapse',
+        'data-bs-target': '#orgDetails',
+        'aria-expanded': 'false',
+        'aria-controls': 'orgDetails',
+      },
+      icon('person-lines-fill', 'me-1'),
+      'Account & organisation',
+    ),
+  );
+}
+
+function renderOrgDetails(p) {
+  const u = p.user;
+  const c = p.context;
+  const managerCell = u.manager
+    ? h('div', {}, h('div', {}, u.manager, u.managerJobTitle ? h('span', { class: 'text-body-secondary' }, ` · ${u.managerJobTitle}`) : null), h('div', { class: 'small text-body-secondary text-break' }, u.managerUpn))
+    : '—';
+  const signIn = (key) => (c.signInActivity.status === 'ok' ? withAgo(c.signInActivity.data[key]) : h('span', { class: 'text-body-secondary' }, c.signInActivity.message));
+  const licences =
+    c.licences.status !== 'ok'
+      ? h('span', { class: 'text-body-secondary' }, c.licences.message)
+      : c.licences.data.length === 0
+        ? 'None'
+        : h(
+            'div',
+            { class: 'd-flex flex-wrap gap-1' },
+            c.licences.data.map((l) => h('span', { class: `badge ${l.frontline ? 'text-bg-info' : 'text-bg-secondary'}`, title: l.skuPartNumber }, l.name)),
+          );
+  const location = [u.city, u.state, u.country].filter(Boolean).join(', ');
+
+  detailBody('orgDetails').replaceChildren(
+    h(
+      'div',
+      { class: 'row g-0' },
+      h(
+        'div',
+        { class: 'col-lg-6' },
+        subheading('Organisation'),
+        kv([
+          ['Job title', u.jobTitle],
+          ['Department', u.department],
+          ['Company', u.companyName],
+          ['Employee type', u.employeeType],
+          ['Employee ID', u.employeeId],
+          ['Hire date', u.employeeHireDate ? withAgo(u.employeeHireDate) : '—'],
+          ['Manager', managerCell],
+          ['Direct reports', c.directReports.status === 'ok' ? String(c.directReports.data) : '—'],
+          ['Office', u.officeLocation],
+          ['Location', location],
+          ['Usage location', u.usageLocation],
+          ['Email', u.mail],
+          ['Phone', u.businessPhones.join(', ')],
+          ['Mobile', u.mobilePhone],
+        ]),
+      ),
+      h(
+        'div',
+        { class: 'col-lg-6' },
+        subheading('Account'),
+        kv([
+          ['Account type', u.accountType],
+          ['Account enabled', yesNo(u.accountEnabled)],
+          ['Created', withAgo(u.createdDateTime)],
+          ['Password last changed', withAgo(u.lastPasswordChangeDateTime)],
+          ['Last interactive sign-in', signIn('lastSignIn')],
+          ['Last non-interactive sign-in', signIn('lastNonInteractiveSignIn')],
+          ['Last successful sign-in', signIn('lastSuccessfulSignIn')],
+          ['Licences', licences],
+          ...(u.accountType === 'Hybrid'
+            ? [
+                ['sAMAccountName', u.onPremisesSamAccountName],
+                ['Distinguished name', u.onPremisesDistinguishedName],
+                ['On-premises SID', u.onPremisesSecurityIdentifier],
+              ]
+            : []),
+        ]),
+      ),
+    ),
+  );
+}
+
 function renderProfile(p) {
   const u = p.user;
   const a = p.assessment;
@@ -632,10 +755,12 @@ function renderProfile(p) {
     .slice(0, 2)
     .map((w) => w[0].toUpperCase())
     .join('');
-  $('#profileAvatar').textContent = initials || '?';
+  renderAvatar(u, initials);
   $('#profileName').textContent = u.displayName;
   $('#profileUpn').textContent = u.userPrincipalName;
   $('#profileBadges').replaceChildren(...identityBadges(u, p.identity));
+  renderRoleLine(p);
+  renderOrgDetails(p);
 
   // Overall verdict + summary
   $('#overall').replaceChildren(
@@ -731,27 +856,10 @@ function renderProfile(p) {
     ),
   );
 
-  // User & devices
+  // Devices
   const devices = p.devices;
   stat($('#deviceStat'), devices.status === 'ok' ? devices.data.length : null, 'device(s) found', a.devices);
   detailBody('userDetails').replaceChildren(
-    kv([
-      ['Account enabled', yesNo(u.accountEnabled)],
-      ['Account type', u.accountType],
-      ['Job title', u.jobTitle],
-      ['Department', u.department],
-      ['Office', u.officeLocation],
-      ['City', u.city],
-      ['Email', u.mail],
-      ['Mobile', u.mobilePhone],
-      ['Manager', u.manager],
-      ['Created', fmtDate(u.createdDateTime)],
-      ['Password last changed', fmtDate(u.lastPasswordChangeDateTime)],
-      ['sAMAccountName', u.onPremisesSamAccountName],
-      ['Distinguished name', u.onPremisesDistinguishedName],
-      ['On-premises SID', u.onPremisesSecurityIdentifier],
-    ]),
-    h('div', { class: 'border-top' }),
     sectionOr(devices, (list) =>
       list.length === 0
         ? emptyState('No registered devices.', 'laptop')
@@ -787,7 +895,9 @@ async function loadProfile(id, displayName) {
   $('#profileName').textContent = displayName ?? '';
   $('#profileUpn').textContent = '';
   $('#profileBadges').replaceChildren();
-  $('#profileAvatar').textContent = '';
+  $('#profileRole').replaceChildren();
+  $('#profileContext').replaceChildren();
+  $('#profileAvatar').replaceChildren();
   $('#profileLoading').hidden = false;
   $('#profileBody').hidden = true;
   $('#profile').scrollIntoView({ behavior: 'smooth', block: 'start' });

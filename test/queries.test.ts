@@ -50,6 +50,8 @@ describe('queries', () => {
       'transitiveGroups',
       'methodAudits',
       'guestInvites',
+      'signInActivity',
+      'directReports',
     ]);
     expect(batch.length).toBeLessThanOrEqual(20);
     expect(batch.every((r) => r.method === 'GET' && r.url.startsWith('/'))).toBe(true);
@@ -72,6 +74,24 @@ describe('queries', () => {
     );
     expect(byId.transitiveGroups!.headers).toEqual({ ConsistencyLevel: 'eventual' });
     expect(param(byId.transitiveGroups!.url, '$count')).toBe('true');
+  });
+
+  it('keeps signInActivity out of the main user read so a missing P1 licence only affects that field', () => {
+    const byId = Object.fromEntries(queries.userProfileBatch(ID, now).map((r) => [r.id, r]));
+    expect(param(byId.user!.url, '$select')).not.toContain('signInActivity');
+    expect(param(byId.signInActivity!.url, '$select')).toBe('signInActivity');
+  });
+
+  it('reads licences from the user record, not the delegated-only licenseDetails endpoint', () => {
+    const batch = queries.userProfileBatch(ID, now);
+    expect(batch.some((r) => r.url.includes('licenseDetails'))).toBe(false);
+    expect(param(batch[0]!.url, '$select')).toContain('assignedLicenses');
+    expect(queries.subscribedSkus()).toBe('/subscribedSkus?$select=skuId%2CskuPartNumber');
+  });
+
+  it('builds photo URLs for an object id only', () => {
+    expect(queries.userPhoto(ID)).toEqual([`/users/${ID}/photos/120x120/$value`, `/users/${ID}/photo/$value`]);
+    expect(() => queries.userPhoto('../me')).toThrow();
   });
 
   it('builds the beta sign-in query for an object id only', () => {
