@@ -1,13 +1,16 @@
 import { DefaultAzureCredential, type TokenCredential } from '@azure/identity';
 
-const GRAPH_ROOT = 'https://graph.microsoft.com/v1.0';
+const GRAPH_HOST = 'https://graph.microsoft.com';
 const GRAPH_SCOPE = 'https://graph.microsoft.com/.default';
 const MAX_RETRIES = 3;
+
+/** v1.0 for everything except the few properties that only exist in beta (sign-in authenticationDetails). */
+export type GraphVersion = 'v1.0' | 'beta';
 
 export interface GraphRequest {
   id: string;
   method: 'GET';
-  /** Path relative to /v1.0, e.g. `/users/{id}` */
+  /** Path relative to the version root, e.g. `/users/{id}` */
   url: string;
   headers?: Record<string, string>;
 }
@@ -20,7 +23,7 @@ export interface GraphResponse<T = unknown> {
 export interface GraphClient {
   get<T>(url: string, headers?: Record<string, string>): Promise<GraphResponse<T>>;
   /** Sends up to 20 requests as one JSON batch and returns the responses keyed by request id. */
-  batch(requests: GraphRequest[]): Promise<Map<string, GraphResponse>>;
+  batch(requests: GraphRequest[], opts?: { version?: GraphVersion }): Promise<Map<string, GraphResponse>>;
 }
 
 export class GraphError extends Error {
@@ -45,12 +48,12 @@ export class HttpGraphClient implements GraphClient {
     private readonly fetchImpl: typeof fetch = fetch,
   ) {}
 
-  private async send(method: string, url: string, headers: Record<string, string> = {}, body?: unknown) {
+  private async send(method: string, url: string, headers: Record<string, string> = {}, body?: unknown, version: GraphVersion = 'v1.0') {
     const token = await this.credential.getToken(GRAPH_SCOPE);
     if (!token) throw new GraphError(401, 'noToken', 'Could not acquire a Microsoft Graph token');
 
     for (let attempt = 0; ; attempt++) {
-      const res = await this.fetchImpl(`${GRAPH_ROOT}${url}`, {
+      const res = await this.fetchImpl(`${GRAPH_HOST}/${version}${url}`, {
         method,
         headers: {
           authorization: `Bearer ${token.token}`,
@@ -76,9 +79,9 @@ export class HttpGraphClient implements GraphClient {
     return res as GraphResponse<T>;
   }
 
-  async batch(requests: GraphRequest[]): Promise<Map<string, GraphResponse>> {
+  async batch(requests: GraphRequest[], opts: { version?: GraphVersion } = {}): Promise<Map<string, GraphResponse>> {
     if (requests.length > 20) throw new Error('Graph JSON batching supports at most 20 requests');
-    const res = await this.send('POST', '/$batch', {}, { requests });
+    const res = await this.send('POST', '/$batch', {}, { requests }, opts.version);
     if (res.status >= 400) throw toGraphError(res);
     const responses = (res.body as { responses?: { id: string; status: number; body: unknown }[] }).responses ?? [];
     return new Map(responses.map((r) => [r.id, { status: r.status, body: r.body }]));

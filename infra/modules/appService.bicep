@@ -12,6 +12,9 @@ param tenantId string
 @description('Key Vault URI holding the hibp-api-key secret; empty disables the HIBP check')
 param hibpSecretUri string = ''
 
+@description('Tenant policy JSON for the POLICY_JSON app setting; empty uses the built-in defaults')
+param policyJson string = ''
+
 resource plan 'Microsoft.Web/serverfarms@2024-04-01' = {
   name: '${appName}-plan'
   location: location
@@ -39,7 +42,8 @@ var appSettings = union(
     SCM_DO_BUILD_DURING_DEPLOYMENT: 'false'
     WEBSITE_HEALTHCHECK_MAXPINGFAILURES: '3'
   },
-  empty(hibpSecretUri) ? {} : { HIBP_API_KEY: '@Microsoft.KeyVault(SecretUri=${hibpSecretUri})' }
+  empty(hibpSecretUri) ? {} : { HIBP_API_KEY: '@Microsoft.KeyVault(SecretUri=${hibpSecretUri})' },
+  empty(policyJson) ? {} : { POLICY_JSON: policyJson }
 )
 
 // Easy Auth v2: every request except /healthz must be signed in with Entra ID.

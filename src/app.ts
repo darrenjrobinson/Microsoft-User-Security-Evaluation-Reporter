@@ -5,7 +5,9 @@ import path from 'node:path';
 import { requireOperator } from './auth.js';
 import type { Config } from './config.js';
 import { GraphError, HttpGraphClient, type GraphClient } from './graph/client.js';
+import { mockPolicy } from './mock/fixtures.js';
 import { MockGraphClient, mockHibpFetch } from './mock/mockGraph.js';
+import { parsePolicy } from './policy.js';
 import { apiRouter } from './routes/api.js';
 import { createHibpService, type HibpLookup } from './services/hibp.js';
 import { createProfileService } from './services/profile.js';
@@ -24,6 +26,8 @@ export interface AppDeps {
 
 export function createApp(config: Config, deps: AppDeps = {}) {
   const graph = deps.graph ?? (config.MOCK_GRAPH ? new MockGraphClient() : new HttpGraphClient());
+  // The demo tenant has a break-glass account and sensitive groups to show off
+  const policy = config.MOCK_GRAPH && !config.POLICY_JSON ? parsePolicy(JSON.stringify(mockPolicy)) : config.policy;
   const hibp =
     deps.hibp ??
     createHibpService({
@@ -81,7 +85,7 @@ export function createApp(config: Config, deps: AppDeps = {}) {
         getSecureScore: createSecureScoreService(graph),
         getRecentRisks: createRiskService(graph),
         searchUsers: createUserSearchService(graph),
-        getUserProfile: createProfileService(graph, hibp),
+        getUserProfile: createProfileService(graph, hibp, policy),
       },
       { hibpEnabled: config.hibpEnabled, mock: config.MOCK_GRAPH },
     ),

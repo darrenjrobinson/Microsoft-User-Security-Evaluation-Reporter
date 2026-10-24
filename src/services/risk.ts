@@ -8,6 +8,8 @@ export interface GraphRiskDetection {
   riskState: string;
   riskDetail?: string;
   detectedDateTime: string;
+  /** When the risky activity happened – offline detections can land days later */
+  activityDateTime?: string;
   userId: string;
   userDisplayName?: string;
   userPrincipalName?: string;
@@ -23,6 +25,7 @@ export interface RiskDetectionView {
   level: string;
   state: string;
   detectedDateTime: string;
+  activityDateTime: string | null;
   userId: string;
   userDisplayName: string;
   userPrincipalName: string;
@@ -50,9 +53,22 @@ const RISK_LABELS: Record<string, string> = {
   adminConfirmedUserCompromised: 'Admin confirmed user compromised',
   attackerinTheMiddle: 'Attacker in the middle',
   suspiciousAPITraffic: 'Suspicious API traffic',
+  suspiciousCredentialAddition: 'Suspicious credential addition',
+  anomalousUserActivity: 'Anomalous user activity',
+  attemptedPrtAccess: 'Possible attempt to access Primary Refresh Token',
+  suspiciousSendingPatterns: 'Suspicious sending patterns',
+  userReportedSuspiciousActivity: 'User reported suspicious activity',
+  authenticatorPhishing: 'Suspicious MFA approval',
+  nationStateIP: 'Verified threat actor IP',
+  riskyIPAddress: 'Activity from anonymous IP address',
+  mcasImpossibleTravel: 'Impossible travel',
 };
 
-export const riskLabel = (type: string) => RISK_LABELS[type] ?? type.replace(/([a-z])([A-Z])/g, '$1 $2');
+export const riskLabel = (type: string) => {
+  if (RISK_LABELS[type]) return RISK_LABELS[type];
+  const words = type.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+};
 
 export function toRiskView(d: GraphRiskDetection): RiskDetectionView {
   const loc = d.location;
@@ -63,6 +79,7 @@ export function toRiskView(d: GraphRiskDetection): RiskDetectionView {
     level: d.riskLevel,
     state: d.riskState,
     detectedDateTime: d.detectedDateTime,
+    activityDateTime: d.activityDateTime ?? null,
     userId: d.userId,
     userDisplayName: d.userDisplayName ?? '',
     userPrincipalName: d.userPrincipalName ?? '',

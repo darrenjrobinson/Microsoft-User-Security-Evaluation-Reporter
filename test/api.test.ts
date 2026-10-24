@@ -2,7 +2,8 @@ import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 import { createApp } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
-import { BETH, MORTY, RICK, SUMMER } from '../src/mock/fixtures.js';
+import type { GraphRequest, GraphVersion } from '../src/graph/client.js';
+import { BETH, BREAKGLASS, MORTY, RICK, SUMMER } from '../src/mock/fixtures.js';
 import { MockGraphClient } from '../src/mock/mockGraph.js';
 
 const principal = (roles: string[], name = 'Ops Person') =>
@@ -77,7 +78,7 @@ describe('API', () => {
     await get('/api/users').expect(400);
   });
 
-  it('builds a full profile in one Graph batch', async () => {
+  it('builds a full profile from one v1.0 batch, one beta batch and cached tenant policies', async () => {
     const { app: a, graph } = app();
     const res = await request(a).get(`/api/users/${RICK}/profile`).set('x-ms-client-principal', operator).expect(200);
     expect(res.body.user.accountType).toBe('Hybrid');
@@ -85,13 +86,101 @@ describe('API', () => {
     expect(res.body.assessment.overall.level).toBe('danger');
     expect(res.body.hibp.data.breaches).toHaveLength(2);
     expect(res.body.signIns.data).toHaveLength(4);
-    expect(graph.calls).toHaveLength(7);
+    expect(res.body.signIns.data[0].authMethods).toEqual(['Password', 'Text message']);
+    // + Rick is in one role-assignable group, so its roles are looked up in a follow-up batch
+    expect(graph.calls).toHaveLength(17 + 1 + 2 + 3);
+    expect(graph.calls.filter((c) => c.startsWith('/beta/'))).toEqual([expect.stringMatching(/^\/beta\/auditLogs\/signIns\?/)]);
+
+    // tenant policies are read once, not per profile
+    await request(a).get(`/api/users/${MORTY}/profile`).set('x-ms-client-principal', operator).expect(200);
+    expect(graph.calls.filter((c) => c.startsWith('/policies/'))).toHaveLength(2);
+  });
+
+  it('explains a risky privileged account', async () => {
+    const { body } = await get(`/api/users/${RICK}/profile`).expect(200);
+    expect(body.identity).toMatchObject({ isPrivileged: true, isBreakGlass: false, licensedWorkloads: ['Mailbox', 'Teams', 'SharePoint / OneDrive'] });
+    expect(body.assessment.overall.reasons).toContain('2 permanently active high-impact roles');
+    expect(body.authStrength.data.verdict).toBe('phishable');
+    expect(body.privilege.data.assignments.map((a: { roleName: string; state: string; groupName: string }) => `${a.roleName}:${a.state}:${a.groupName}`)).toEqual([
+      'Global Administrator:permanentActive:',
+      'Privileged Authentication Administrator:permanentActive:Tier 0 Admins',
+      'Exchange Administrator:timeBoundActive:',
+      'Security Administrator:eligible:',
+      'Message Center Reader:permanentActive:',
+    ]);
+    // time-bound direct assignments of required-PIM roles are drift too
+    expect(body.assessment.pimDrift.label).toBe('PIM required, but 3 roles actively assigned');
+    // the failed "Admin registered security info" operation isn't a change
+    expect(body.credentialChanges.data.events.filter((e: { activity: string }) => e.activity === 'Admin registered security info')).toHaveLength(1);
+    expect(body.assessment.pimDrift.level).toBe('warning');
+    expect(body.assessment.ownership).toMatchObject({ level: 'danger', label: 'Owns 1 role-assignable group' });
+    expect(body.ownership.data.counts).toMatchObject({ application: 1, servicePrincipal: 1, agent: 1 });
+    expect(body.assessment.credentialChanges.level).toBe('danger');
+    const adminChange = body.credentialChanges.data.events.find((e: { activity: string }) => e.activity === 'Admin registered security info');
+    expect(adminChange.flags).toEqual(['Made by helpdesk.temp@contoso.example', 'Within 72 hours of Suspicious credential addition']);
+    expect(body.assessment.adminHygiene.level).toBe('danger');
+    expect(body.assessment.caPosture.level).toBe('warning');
   });
 
   it('rates a well-configured user as great', async () => {
     const res = await get(`/api/users/${MORTY}/profile`).expect(200);
-    expect(res.body.assessment.overall).toMatchObject({ level: 'good', score: 0 });
+    expect(res.body.assessment.overall).toMatchObject({ level: 'good', score: 0, reasons: [] });
     expect(res.body.assessment.devices.level).toBe('good');
+    expect(res.body.authStrength.data.verdict).toBe('phishingResistant');
+    expect(res.body.tenant.notes).toEqual([]);
+  });
+
+  it('recognises break-glass and guest identities', async () => {
+    const bg = await get(`/api/users/${BREAKGLASS}/profile`).expect(200);
+    expect(bg.body.identity.isBreakGlass).toBe(true);
+    expect(bg.body.assessment.privilege.level).toBe('info');
+    expect(bg.body.assessment.pimDrift.level).toBe('info');
+    expect(bg.body.assessment.overall.level).toBe('good');
+
+    const guest = await get(`/api/users/${SUMMER}/profile`).expect(200);
+    expect(guest.body.assessment.authStrength.level).toBe('info');
+  });
+
+  it('flags guest footprint and membership sprawl', async () => {
+    const { body } = await get(`/api/users/${BETH}/profile`).expect(200);
+    expect(body.guests.data.footprint).toBe(34);
+    expect(body.assessment.guests.level).toBe('danger');
+    expect(body.membership.data).toMatchObject({ directGroups: 90, transitiveGroups: 260 });
+    expect(body.membership.data.sensitiveGroups.map((g: { displayName: string }) => g.displayName)).toEqual(['Finance - Payroll']);
+    expect(body.assessment.membership.level).toBe('warning');
+    expect(body.assessment.recovery).toMatchObject({ level: 'warning', label: 'A Temporary Access Pass is active' });
+    expect(body.assessment.pimDrift.level).toBe('good');
+  });
+
+  it('keeps the profile when new sections are forbidden, unlicensed or beta fails', async () => {
+    class DegradedGraph extends MockGraphClient {
+      override async batch(requests: GraphRequest[], opts: { version?: GraphVersion } = {}) {
+        if (opts.version === 'beta') throw new Error('beta is down');
+        const responses = await super.batch(requests, opts);
+        responses.set('ownedObjects', { status: 403, body: { error: { code: 'Authorization_RequestDenied', message: 'Insufficient privileges' } } });
+        const p2 = { status: 403, body: { error: { code: 'AadPremiumLicenseRequired', message: 'The tenant needs an AAD Premium 2 license.' } } };
+        if (responses.has('roleSchedules')) {
+          responses.set('roleSchedules', p2);
+          responses.set('roleEligibilities', p2);
+        }
+        return responses;
+      }
+    }
+    const config = loadConfig({ NODE_ENV: 'test', MOCK_GRAPH: 'true' });
+    const res = await request(createApp(config, { graph: new DegradedGraph() }))
+      .get(`/api/users/${RICK}/profile`)
+      .set('x-ms-client-principal', operator)
+      .expect(200);
+    expect(res.body.ownership).toMatchObject({ status: 'unavailable', reason: 'forbidden' });
+    expect(res.body.ownership.message).toMatch(/application permissions/);
+    expect(res.body.assessment.ownership.level).toBe('unknown');
+    // falls back to plain role assignments: everything is permanent, no PIM detail
+    expect(res.body.privilege.data.pimDetail).toBe(false);
+    expect(res.body.assessment.pimDrift.level).toBe('info');
+    expect(res.body.authStrength.data.observed).toBeNull();
+    expect(res.body.tenant.notes).toEqual(
+      expect.arrayContaining([expect.stringMatching(/PIM schedules need/), expect.stringMatching(/Graph beta\) are unavailable/)]),
+    );
   });
 
   it('rejects non-GUID ids and 404s unknown users', async () => {

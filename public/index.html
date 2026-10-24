@@ -185,6 +185,7 @@
               <div id="summaryChecks" class="vstack gap-3"></div>
             </div>
           </div>
+          <div id="tenantNotes" class="card-footer small text-body-secondary" hidden></div>
         </div>
 
         <!-- Security checks -->
@@ -193,7 +194,7 @@
             <article class="card h-100 shadow-sm check-card">
               <div class="card-body">
                 <h3 class="h5 card-title"><i class="bi bi-exclamation-diamond" aria-hidden="true"></i>Risk events</h3>
-                <p class="text-body-secondary small">This check looks for user risk events such as <strong>malware-linked IPs</strong>, <strong>anonymous IP</strong> (Tor/VPN) and <strong>atypical travel</strong>. Evaluate any risks in the context of the user, their position and other recent activity.</p>
+                <p class="text-body-secondary small">This check looks for user risk events such as <strong>malware-linked IPs</strong>, <strong>anonymous IP</strong> (Tor/VPN), <strong>atypical travel</strong> and <strong>suspicious credential additions</strong>. Evaluate any risks in the context of the user, their position and other recent activity.</p>
                 <div class="stat" id="riskStat"></div>
               </div>
               <div class="card-footer bg-transparent border-0 pt-0 pb-3">
@@ -204,12 +205,12 @@
           <div class="col-lg-4">
             <article class="card h-100 shadow-sm check-card">
               <div class="card-body">
-                <h3 class="h5 card-title"><i class="bi bi-person-lock" aria-hidden="true"></i>Registered MFA methods</h3>
-                <p class="text-body-secondary small">This check lists the user's registered multifactor authentication methods. The preferred primary method is <strong>Microsoft Authenticator</strong> or a passkey. Text message (SMS) and voice should be <strong>avoided</strong> and used only where the user has no compatible device.</p>
+                <h3 class="h5 card-title"><i class="bi bi-person-lock" aria-hidden="true"></i>Authentication strength</h3>
+                <p class="text-body-secondary small">Being registered for MFA isn&rsquo;t the same as being hard to phish. This check compares what the user has registered with what their recent sign-ins <strong>actually used</strong>. <strong>Passkeys</strong> and <strong>Windows Hello for Business</strong> are phishing-resistant; SMS and voice should be avoided, including as recovery methods.</p>
                 <div class="stat" id="mfaStat"></div>
               </div>
               <div class="card-footer bg-transparent border-0 pt-0 pb-3">
-                <button class="btn btn-sm btn-outline-secondary w-100" type="button" data-bs-toggle="collapse" data-bs-target="#mfaDetails" aria-expanded="false" aria-controls="mfaDetails"><i class="bi bi-chevron-down me-1" aria-hidden="true"></i>MFA method details</button>
+                <button class="btn btn-sm btn-outline-secondary w-100" type="button" data-bs-toggle="collapse" data-bs-target="#mfaDetails" aria-expanded="false" aria-controls="mfaDetails"><i class="bi bi-chevron-down me-1" aria-hidden="true"></i>Authentication details</button>
               </div>
             </article>
           </div>
@@ -218,7 +219,7 @@
               <div class="card-body">
                 <h3 class="h5 card-title d-flex align-items-center"><i class="bi bi-incognito" aria-hidden="true"></i>Pwned check
                   <a class="ms-auto" href="https://haveibeenpwned.com/" target="_blank" rel="noopener"><img src="/images/hibp-logo.svg" alt="Have I Been Pwned" class="hibp-logo" height="22"></a></h3>
-                <p class="text-body-secondary small">This check looks up the user's email address in <strong>Have I Been Pwned</strong> breaches and pastes, alongside Entra ID Protection <strong>leaked credentials</strong> detections. If a password has been exposed it is <strong>strongly</strong> recommended the user changes it, to mitigate password spray and credential stuffing attacks.</p>
+                <p class="text-body-secondary small">This check looks up the user&rsquo;s email address in <strong>Have I Been Pwned</strong> breaches and pastes, alongside Entra ID Protection <strong>leaked credentials</strong> detections. If a password has been exposed it is <strong>strongly</strong> recommended the user changes it, to mitigate password spray and credential stuffing attacks.</p>
                 <div class="stat" id="pwnedStat"></div>
               </div>
               <div class="card-footer bg-transparent border-0 pt-0 pb-3">
@@ -228,16 +229,59 @@
           </div>
         </div>
         <div class="collapse mt-3" id="riskDetails"><div class="card shadow-sm"><div class="card-header small fw-semibold">Risk events</div><div class="detail-body"></div></div></div>
-        <div class="collapse mt-3" id="mfaDetails"><div class="card shadow-sm"><div class="card-header small fw-semibold">MFA registration</div><div class="detail-body"></div></div></div>
+        <div class="collapse mt-3" id="mfaDetails"><div class="card shadow-sm"><div class="card-header small fw-semibold">Authentication methods &amp; strength</div><div class="detail-body"></div></div></div>
         <div class="collapse mt-3" id="pwnedDetails"><div class="card shadow-sm"><div class="card-header small fw-semibold">Have I Been Pwned</div><div class="detail-body"></div></div></div>
 
-        <h3 class="h5 mt-5 mb-3">Recent user activity and user details</h3>
+        <h3 class="h5 mt-5 mb-3">Privilege and blast radius</h3>
         <div class="row g-4">
           <div class="col-lg-4">
             <article class="card h-100 shadow-sm check-card">
               <div class="card-body">
+                <h3 class="h5 card-title"><i class="bi bi-shield-shaded" aria-hidden="true"></i>Privilege exposure</h3>
+                <p class="text-body-secondary small">Entra roles the user holds or can activate, how much of the tenant each can reach, and whether they are <strong>permanent</strong> or governed by <strong>PIM</strong>. High-impact roles should be eligible-only and held by a dedicated admin account.</p>
+                <div class="stat" id="privilegeStat"></div>
+              </div>
+              <div class="card-footer bg-transparent border-0 pt-0 pb-3">
+                <button class="btn btn-sm btn-outline-secondary w-100" type="button" data-bs-toggle="collapse" data-bs-target="#privilegeDetails" aria-expanded="false" aria-controls="privilegeDetails"><i class="bi bi-chevron-down me-1" aria-hidden="true"></i>Roles &amp; PIM</button>
+              </div>
+            </article>
+          </div>
+          <div class="col-lg-4">
+            <article class="card h-100 shadow-sm check-card">
+              <div class="card-body">
+                <h3 class="h5 card-title"><i class="bi bi-diagram-2" aria-hidden="true"></i>Owned objects</h3>
+                <p class="text-body-secondary small">Apps, service principals, agent identities and groups the user owns. Ownership is control: an owner can add credentials to an app or add themselves to a <strong>role-assignable group</strong>.</p>
+                <div class="stat" id="ownershipStat"></div>
+              </div>
+              <div class="card-footer bg-transparent border-0 pt-0 pb-3">
+                <button class="btn btn-sm btn-outline-secondary w-100" type="button" data-bs-toggle="collapse" data-bs-target="#ownershipDetails" aria-expanded="false" aria-controls="ownershipDetails"><i class="bi bi-chevron-down me-1" aria-hidden="true"></i>Owned objects</button>
+              </div>
+            </article>
+          </div>
+          <div class="col-lg-4">
+            <article class="card h-100 shadow-sm check-card">
+              <div class="card-body">
+                <h3 class="h5 card-title"><i class="bi bi-people" aria-hidden="true"></i>Guests &amp; memberships</h3>
+                <p class="text-body-secondary small">Guests the user has invited or sponsors, and how far their group memberships reach. Neither is bad in itself, but a large footprint widens external exposure and lateral reach.</p>
+                <div class="stat" id="guestStat"></div>
+              </div>
+              <div class="card-footer bg-transparent border-0 pt-0 pb-3">
+                <button class="btn btn-sm btn-outline-secondary w-100" type="button" data-bs-toggle="collapse" data-bs-target="#guestDetails" aria-expanded="false" aria-controls="guestDetails"><i class="bi bi-chevron-down me-1" aria-hidden="true"></i>Guests &amp; memberships</button>
+              </div>
+            </article>
+          </div>
+        </div>
+        <div class="collapse mt-3" id="privilegeDetails"><div class="card shadow-sm"><div class="card-header small fw-semibold">Entra role assignments</div><div class="detail-body"></div></div></div>
+        <div class="collapse mt-3" id="ownershipDetails"><div class="card shadow-sm"><div class="card-header small fw-semibold">Owned apps, agents and groups</div><div class="detail-body"></div></div></div>
+        <div class="collapse mt-3" id="guestDetails"><div class="card shadow-sm"><div class="card-header small fw-semibold">Guest governance &amp; memberships</div><div class="detail-body"></div></div></div>
+
+        <h3 class="h5 mt-5 mb-3">Recent user activity and user details</h3>
+        <div class="row g-4">
+          <div class="col-md-6 col-xl-3">
+            <article class="card h-100 shadow-sm check-card">
+              <div class="card-body">
                 <h3 class="h5 card-title"><i class="bi bi-box-arrow-in-right" aria-hidden="true"></i>Recent sign-in activity</h3>
-                <p class="text-body-secondary small">Review recent sign-ins alongside risk events and password resets to spot unusual activity for the account. For Windows desktop sign-ins, a Microsoft Entra joined device is strongly recommended.</p>
+                <p class="text-body-secondary small">Recent sign-ins with the methods used and the Conditional Access outcome. For Windows desktop sign-ins, a Microsoft Entra joined device is strongly recommended.</p>
                 <div class="stat" id="signInStat"></div>
               </div>
               <div class="card-footer bg-transparent border-0 pt-0 pb-3">
@@ -245,11 +289,23 @@
               </div>
             </article>
           </div>
-          <div class="col-lg-4">
+          <div class="col-md-6 col-xl-3">
+            <article class="card h-100 shadow-sm check-card">
+              <div class="card-body">
+                <h3 class="h5 card-title"><i class="bi bi-key" aria-hidden="true"></i>Credential changes</h3>
+                <p class="text-body-secondary small">Recently added or changed security info. A method added by someone else, or close to risky activity, can mean an attacker is setting up <strong>persistence</strong>.</p>
+                <div class="stat" id="credentialStat"></div>
+              </div>
+              <div class="card-footer bg-transparent border-0 pt-0 pb-3">
+                <button class="btn btn-sm btn-outline-secondary w-100" type="button" data-bs-toggle="collapse" data-bs-target="#credentialDetails" aria-expanded="false" aria-controls="credentialDetails"><i class="bi bi-chevron-down me-1" aria-hidden="true"></i>Change timeline</button>
+              </div>
+            </article>
+          </div>
+          <div class="col-md-6 col-xl-3">
             <article class="card h-100 shadow-sm check-card">
               <div class="card-body">
                 <h3 class="h5 card-title"><i class="bi bi-unlock" aria-hidden="true"></i>Recent SSPR activity</h3>
-                <p class="text-body-secondary small">Self-service password reset activity for the user is shown here. Repeated unsuccessful attempts could indicate attempts to compromise the account. Review alongside the user's risk events.</p>
+                <p class="text-body-secondary small">Self-service password reset activity for the user is shown here. Repeated unsuccessful attempts could indicate attempts to compromise the account. Review alongside the user&rsquo;s risk events.</p>
                 <div class="stat" id="ssprStat"></div>
               </div>
               <div class="card-footer bg-transparent border-0 pt-0 pb-3">
@@ -257,11 +313,11 @@
               </div>
             </article>
           </div>
-          <div class="col-lg-4">
+          <div class="col-md-6 col-xl-3">
             <article class="card h-100 shadow-sm check-card">
               <div class="card-body">
                 <h3 class="h5 card-title"><i class="bi bi-person-vcard" aria-hidden="true"></i>User &amp; device details</h3>
-                <p class="text-body-secondary small">Account status, title, department, office, manager and on-premises identity, plus the user's Microsoft Entra registered and joined devices.</p>
+                <p class="text-body-secondary small">Account status, title, department, office, manager and on-premises identity, plus the user&rsquo;s Microsoft Entra registered and joined devices.</p>
                 <div class="stat" id="deviceStat"></div>
               </div>
               <div class="card-footer bg-transparent border-0 pt-0 pb-3">
@@ -270,7 +326,8 @@
             </article>
           </div>
         </div>
-        <div class="collapse mt-3" id="signInDetails"><div class="card shadow-sm"><div class="card-header small fw-semibold">Last 10 sign-ins (30 days)</div><div class="detail-body"></div></div></div>
+        <div class="collapse mt-3" id="signInDetails"><div class="card shadow-sm"><div class="card-header small fw-semibold">Recent sign-ins (30 days)</div><div class="detail-body"></div></div></div>
+        <div class="collapse mt-3" id="credentialDetails"><div class="card shadow-sm"><div class="card-header small fw-semibold">Security info changes (30 days)</div><div class="detail-body"></div></div></div>
         <div class="collapse mt-3" id="ssprDetails"><div class="card shadow-sm"><div class="card-header small fw-semibold">Self-service password reset (30 days)</div><div class="detail-body"></div></div></div>
         <div class="collapse mt-3" id="userDetails"><div class="card shadow-sm"><div class="card-header small fw-semibold">User profile &amp; devices</div><div class="detail-body"></div></div></div>
       </div>

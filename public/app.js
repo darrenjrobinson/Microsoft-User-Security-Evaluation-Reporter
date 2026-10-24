@@ -290,15 +290,43 @@ function initSearch() {
 
 // ---------- user profile ----------
 
+// The weighted checks behind the overall verdict, in display order
 const CHECKS = [
   ['risk', 'Risk events', 'exclamation-diamond'],
   ['password', 'Password exposure', 'incognito'],
-  ['mfa', 'MFA configuration', 'person-lock'],
-  ['devices', 'Devices', 'laptop'],
-  ['sspr', 'Password resets', 'unlock'],
+  ['mfa', 'MFA registration', 'person-lock'],
+  ['authStrength', 'Authentication strength', 'fingerprint'],
+  ['privilege', 'Privilege exposure', 'shield-shaded'],
+  ['guests', 'Guest footprint', 'people'],
+  ['membership', 'Group memberships', 'diagram-3'],
 ];
 const BAR_WIDTH = { good: 100, warning: 66, danger: 100, info: 100, unknown: 100 };
 const VERDICT_ICONS = { good: 'person-check-fill', warning: 'person-exclamation', danger: 'person-x-fill' };
+
+const IMPACT_LEVEL = { high: 'danger', medium: 'warning', low: 'info' };
+const ROLE_STATES = {
+  permanentActive: ['Permanent', 'danger'],
+  timeBoundActive: ['Time-bound', 'warning'],
+  activated: ['Activated (PIM)', 'info'],
+  eligible: ['Eligible (PIM)', 'good'],
+};
+const OWNED_KINDS = {
+  application: 'App registration',
+  servicePrincipal: 'Enterprise app',
+  agent: 'Agent identity',
+  roleAssignableGroup: 'Role-assignable group',
+  team: 'Team',
+  m365Group: 'Microsoft 365 group',
+  securityGroup: 'Security group',
+  mailGroup: 'Distribution / mail-enabled group',
+  other: 'Other',
+};
+const VERDICTS = {
+  phishingResistant: ['Phishing-resistant', 'good'],
+  passwordlessCapable: ['Passwordless-capable', 'info'],
+  phishable: ['MFA only – phishable', 'warning'],
+  none: ['No strong method', 'danger'],
+};
 
 function checkRow(name, iconName, check) {
   const bar = h('div', { class: 'progress-bar' });
@@ -328,9 +356,270 @@ function stat(target, count, noun, check) {
 
 const detailBody = (id) => $(`#${id} .detail-body`);
 const sectionOr = (section, render) => (section.status === 'ok' ? render(section.data) : unavailableState(section));
+const count = (section, fn) => (section.status === 'ok' ? fn(section.data) : null);
 
 function kv(pairs) {
   return h('dl', { class: 'kv' }, pairs.flatMap(([k, v]) => [h('dt', {}, k), h('dd', {}, v instanceof Node ? v : dash(v))]));
+}
+
+const badges = (items, cls = 'text-bg-secondary') =>
+  items.length ? h('div', { class: 'd-flex flex-wrap gap-1' }, items.map((x) => h('span', { class: `badge ${cls}` }, x))) : 'None';
+
+/** A labelled check result inside a detail panel */
+const checkLine = (name, check) =>
+  h('div', { class: 'px-3 pt-3 d-flex gap-2 align-items-center flex-wrap' }, h('span', { class: 'fw-semibold' }, `${name}:`), levelBadge(check.level, check.label));
+
+const subheading = (text) => h('h4', { class: 'h6 px-3 pt-3 mb-0' }, text);
+
+/** Lookups that failed or were truncated, so the operator knows the list may be incomplete */
+const gapNote = (gaps) =>
+  gaps.length
+    ? h('div', { class: 'alert alert-warning small m-3 mb-0 d-flex gap-2' }, icon('exclamation-triangle'), h('ul', { class: 'mb-0 ps-3' }, gaps.map((g) => h('li', {}, g))))
+    : null;
+
+function renderAuthentication(p, a) {
+  const auth = p.authStrength;
+  const mfa = p.mfa;
+  stat($('#mfaStat'), count(auth, (d) => d.methods?.length ?? null), 'methods registered', a.authStrength);
+  detailBody('mfaDetails').replaceChildren(
+    sectionOr(auth, (d) =>
+      h(
+        'div',
+        {},
+        h(
+          'div',
+          { class: 'px-3 pt-3 d-flex gap-2 align-items-center flex-wrap' },
+          h('span', { class: 'fw-semibold' }, 'Verdict:'),
+          levelBadge(VERDICTS[d.verdict][1], VERDICTS[d.verdict][0]),
+        ),
+        h('p', { class: 'px-3 pt-2 mb-0' }, d.summary),
+        subheading('Observed in recent sign-ins'),
+        d.observed === null
+          ? emptyState('Sign-in authentication details are unavailable (Graph beta), so actual usage can’t be confirmed.', 'question-circle')
+          : d.observed.total === 0
+            ? emptyState('No recent interactive sign-ins with authentication details.')
+            : h(
+                'div',
+                { class: 'px-3 pt-2' },
+                badges(d.observed.methods.map((m) => `${m.method} × ${m.count}`)),
+                h('div', { class: 'small text-body-secondary mt-1' }, `${d.observed.total} interactive sign-in(s) · ${d.observed.counts.phishingResistant} phishing-resistant`),
+              ),
+        subheading('Registered methods'),
+        d.methods === null
+          ? emptyState('The method inventory is unavailable – the app needs UserAuthenticationMethod.Read.All.', 'shield-lock')
+          : d.methods.length === 0
+            ? emptyState('No authentication methods registered.')
+            : table(
+                ['Method', 'Detail', 'Registered'],
+                d.methods.map((m) => [
+                  h('span', {}, m.kind === 'phishingResistant' ? icon('patch-check-fill', 'me-1 lvl-good lvl-text') : null, m.label),
+                  dash(m.detail),
+                  fmtDay(m.createdDateTime),
+                ]),
+                { caption: 'Registered authentication methods', wideOnly: [2] },
+              ),
+      ),
+    ),
+    checkLine('Recovery paths', a.recovery),
+    sectionOr(p.recovery, (r) => (r.weakPaths.length ? h('ul', { class: 'px-5 pt-2 mb-0 small' }, r.weakPaths.map((w) => h('li', {}, w))) : null)),
+    subheading('Registration report'),
+    sectionOr(mfa, (m) =>
+      !m
+        ? emptyState('No MFA registration details for this user.')
+        : kv([
+            ['MFA registered', yesNo(m.isMfaRegistered)],
+            ['Passwordless capable', yesNo(m.isPasswordlessCapable)],
+            ['SSPR registered', yesNo(m.isSsprRegistered)],
+            ['Default MFA method', methodLabel(m.defaultMfaMethod)],
+            ['User preferred method', methodLabel(m.userPreferredMethod)],
+            ['System preferred', m.systemPreferredMethods.map(methodLabel).join(', ')],
+            ['Methods registered', badges(m.methodsRegistered.map(methodLabel))],
+            ['Report updated', fmtDate(m.lastUpdatedDateTime)],
+          ]),
+    ),
+  );
+}
+
+function renderPrivilege(p, a) {
+  const priv = p.privilege;
+  stat($('#privilegeStat'), count(priv, (d) => d.assignments.length), 'role(s)', a.privilege);
+  detailBody('privilegeDetails').replaceChildren(
+    checkLine('Requires PIM', a.pimDrift),
+    checkLine('Admin account hygiene', a.adminHygiene),
+    sectionOr(priv, (d) =>
+      h(
+        'div',
+        { class: 'pt-3' },
+        d.pimDetail ? null : h('p', { class: 'small text-body-secondary px-3 mb-2' }, 'PIM schedules are unavailable, so every role is shown as a permanent assignment.'),
+        gapNote(d.gaps),
+        d.assignments.length === 0
+          ? emptyState('No Entra roles assigned or eligible.', 'shield-check')
+          : table(
+              ['Role', 'Assignment', 'Impact', 'Reach', 'PIM'],
+              d.assignments.map((r) => [
+                h('div', {}, h('div', { class: 'fw-semibold' }, r.roleName), h('div', { class: 'small text-body-secondary' }, [r.scope, r.via === 'group' ? `via ${r.groupName || 'a group'}` : ''].filter(Boolean).join(' · '))),
+                h(
+                  'div',
+                  {},
+                  levelBadge(ROLE_STATES[r.state][1], ROLE_STATES[r.state][0]),
+                  r.endDateTime ? h('div', { class: 'small text-body-secondary mt-1' }, `until ${fmtDate(r.endDateTime)}`) : null,
+                ),
+                levelBadge(IMPACT_LEVEL[r.impact], r.impact[0].toUpperCase() + r.impact.slice(1)),
+                r.themes.length ? badges(r.themes, 'bg-body-tertiary text-body border fw-normal') : '—',
+                r.pimDrift ? levelBadge('warning', 'Should be eligible') : r.pimRequired ? levelBadge('good', 'Required') : '—',
+              ]),
+              { caption: 'Entra role assignments', wideOnly: [3, 4] },
+            ),
+      ),
+    ),
+  );
+}
+
+function renderOwnership(p, a) {
+  const own = p.ownership;
+  stat($('#ownershipStat'), count(own, (d) => d.objects.length), 'owned object(s)', a.ownership);
+  detailBody('ownershipDetails').replaceChildren(
+    sectionOr(own, (d) => (d.complete ? null : gapNote(['Only the first pages of owned objects were read – there are more.']))),
+    sectionOr(own, (d) =>
+      d.objects.length === 0
+        ? emptyState('This user owns no apps, agents or groups.', 'shield-check')
+        : table(
+            ['Name', 'Type', ''],
+            d.objects.map((o) => [
+              h('span', { class: 'fw-semibold' }, o.displayName),
+              OWNED_KINDS[o.kind] ?? o.kind,
+              o.kind === 'roleAssignableGroup'
+                ? levelBadge('danger', 'Grants roles')
+                : o.sensitive
+                  ? levelBadge('danger', 'Sensitive')
+                  : o.kind === 'agent' || o.kind === 'application' || o.kind === 'servicePrincipal'
+                    ? levelBadge('warning', 'Non-human identity')
+                    : null,
+            ]),
+            { caption: 'Objects owned by this user' },
+          ),
+    ),
+  );
+}
+
+function renderGuestsAndMembership(p, a) {
+  const guests = p.guests;
+  const worst = [a.guests, a.membership].sort((x, y) => LEVEL_RANK[y.level] - LEVEL_RANK[x.level])[0];
+  stat($('#guestStat'), count(guests, (d) => d.footprint), 'guest(s) linked', worst);
+  detailBody('guestDetails').replaceChildren(
+    checkLine('Guest footprint', a.guests),
+    sectionOr(guests, (g) =>
+      h(
+        'div',
+        {},
+        gapNote(g.gaps),
+        subheading(`Guests sponsored${g.sponsored ? ` (${g.sponsored.length})` : ''}`),
+        g.sponsored === null
+          ? emptyState('Not available – see the note above.', 'shield-lock')
+          : g.sponsored.length === 0
+            ? emptyState('Sponsors no guests.')
+            : table(['Guest', 'User principal name'], g.sponsored.map((s) => [s.displayName, h('span', { class: 'text-break' }, s.userPrincipalName)]), { wideOnly: [1] }),
+        subheading(`Guests invited in 30 days${g.invites ? ` (${g.invites.length})` : ''}`),
+        g.invites === null
+          ? emptyState('Invitation audit data unavailable.')
+          : g.invites.length === 0
+            ? emptyState('No guest invitations in the last 30 days.')
+            : table(['Invited', 'Guest'], g.invites.map((i) => [h('span', { class: 'text-nowrap' }, fmtDate(i.activityDateTime)), h('span', { class: 'text-break' }, i.invitee)])),
+      ),
+    ),
+    h('div', { class: 'border-top mt-3' }),
+    checkLine('Memberships', a.membership),
+    sectionOr(p.membership, (m) =>
+      kv([
+        ['Direct groups', `${m.complete ? '' : 'At least '}${m.directGroups} (${m.m365Groups} Microsoft 365)`],
+        ['Including nested', m.transitiveGroups ?? '—'],
+        ['Administrative units', badges(m.adminUnits)],
+        ['Active directory roles', badges(m.directoryRoles)],
+        ['Role-assignable groups', badges(m.roleAssignableGroups.map((g) => g.displayName), 'text-bg-danger')],
+        ['Sensitive groups', badges(m.sensitiveGroups.map((g) => g.displayName), 'text-bg-warning')],
+        ['Review thresholds', m.exceeded.length ? h('ul', { class: 'mb-0 ps-3' }, m.exceeded.map((e) => h('li', {}, e))) : 'Within thresholds'],
+      ]),
+    ),
+  );
+}
+
+function renderCredentialChanges(p, a) {
+  const changes = p.credentialChanges;
+  stat($('#credentialStat'), count(changes, (d) => d.events.length), 'change(s)', a.credentialChanges);
+  detailBody('credentialDetails').replaceChildren(
+    sectionOr(changes, (c) =>
+      h(
+        'div',
+        {},
+        c.suspiciousDetections.length
+          ? h(
+              'div',
+              { class: 'alert alert-danger m-3 mb-0 d-flex gap-2' },
+              icon('key-fill'),
+              `Microsoft Entra ID Protection flagged a suspicious credential addition (${fmtDate(c.suspiciousDetections[0].detectedDateTime)}). Review the change below and remove any method the user doesn’t recognise.`,
+            )
+          : null,
+        c.events.length === 0
+          ? emptyState('No security info changes in the last 30 days.', 'shield-check')
+          : table(
+              ['When', 'Change', 'By', 'Signals'],
+              c.events.map((e) => [
+                h('span', { class: 'text-nowrap' }, fmtDate(e.dateTime)),
+                h('div', {}, e.activity, h('div', { class: 'small text-body-secondary' }, e.source === 'audit' ? 'Audit log' : 'Method inventory')),
+                e.source === 'audit' ? (e.bySelf ? 'User' : h('span', { class: 'text-break' }, e.initiatedBy)) : '—',
+                e.flags.length ? h('div', { class: 'vstack gap-1' }, e.flags.map((f) => levelBadge('warning', f))) : '—',
+              ]),
+              { caption: 'Security info changes', wideOnly: [2] },
+            ),
+      ),
+    ),
+  );
+}
+
+function renderSignIns(p) {
+  const signIns = p.signIns;
+  const a = p.assessment;
+  stat($('#signInStat'), signIns.status === 'ok' ? signIns.data.length : null, 'sign-ins (30 days)', a.caPosture);
+  const ca = p.caPosture;
+  detailBody('signInDetails').replaceChildren(
+    checkLine('Conditional Access', a.caPosture),
+    sectionOr(ca, (c) =>
+      h(
+        'p',
+        { class: 'small text-body-secondary px-3 pt-2 mb-0' },
+        `${c.total} interactive sign-in(s): ${c.mfaSatisfied} with MFA, ${c.singleFactor} single-factor (${c.unprotected} with no policy applied), ${c.caFailures} Conditional Access failure(s).`,
+      ),
+    ),
+    sectionOr(signIns, (list) =>
+      list.length === 0
+        ? emptyState('No sign-ins in the last 30 days.')
+        : table(
+            ['Time', 'Application', 'Result', 'Methods', 'Location', 'Device', 'Conditional Access'],
+            list.map((s) => [
+              h('span', { class: 'text-nowrap' }, fmtDate(s.createdDateTime)),
+              h('div', {}, s.appDisplayName, h('div', { class: 'small text-body-secondary' }, s.clientAppUsed)),
+              s.succeeded ? levelBadge('good', 'Success') : h('div', {}, levelBadge('danger', 'Failure'), h('div', { class: 'small text-body-secondary mt-1' }, s.failureReason)),
+              s.authMethods.length ? s.authMethods.join(' + ') : '—',
+              h('div', {}, dash(s.location), h('div', { class: 'small text-body-secondary' }, s.ipAddress)),
+              h('div', {}, [s.operatingSystem, s.browser].filter(Boolean).join(' · ') || '—', h('div', { class: 'small text-body-secondary' }, s.deviceTrustType || 'Not joined/registered')),
+              dash(s.conditionalAccessStatus),
+            ]),
+            { wideOnly: [4, 5, 6] },
+          ),
+    ),
+  );
+}
+
+const LEVEL_RANK = { good: 0, info: 1, unknown: 2, warning: 3, danger: 4 };
+
+function identityBadges(u, identity) {
+  return [
+    accountBadge(u.accountType),
+    u.accountEnabled ? levelBadge('good', 'Enabled') : levelBadge('danger', 'Disabled'),
+    identity.isBreakGlass ? levelBadge('info', 'Emergency access') : null,
+    identity.isPrivileged && !identity.isBreakGlass ? levelBadge('warning', 'Privileged') : null,
+    identity.isServiceAccount ? levelBadge('info', 'Service account') : null,
+  ].filter(Boolean);
 }
 
 function renderProfile(p) {
@@ -346,10 +635,7 @@ function renderProfile(p) {
   $('#profileAvatar').textContent = initials || '?';
   $('#profileName').textContent = u.displayName;
   $('#profileUpn').textContent = u.userPrincipalName;
-  $('#profileBadges').replaceChildren(
-    accountBadge(u.accountType),
-    u.accountEnabled ? levelBadge('good', 'Enabled') : levelBadge('danger', 'Disabled'),
-  );
+  $('#profileBadges').replaceChildren(...identityBadges(u, p.identity));
 
   // Overall verdict + summary
   $('#overall').replaceChildren(
@@ -358,10 +644,17 @@ function renderProfile(p) {
       { class: `lvl-${a.overall.level}` },
       icon(VERDICT_ICONS[a.overall.level], 'verdict-icon'),
       h('div', { class: 'h5 mt-2 mb-1 lvl-text' }, a.overall.label),
-      h('div', { class: 'small text-body-secondary' }, 'User Secure Score risk profile'),
+      a.overall.reasons.length ? h('div', { class: 'small' }, a.overall.reasons.join(' + ')) : null,
+      h('div', { class: 'small text-body-secondary mt-1' }, 'User Secure Score risk profile'),
     ),
   );
   $('#summaryChecks').replaceChildren(...CHECKS.map(([key, name, ic]) => checkRow(name, ic, a[key])));
+  const notes = p.tenant.notes;
+  $('#tenantNotes').hidden = notes.length === 0;
+  $('#tenantNotes').replaceChildren(
+    h('div', { class: 'fw-semibold mb-1' }, icon('building', 'me-1'), 'Tenant context'),
+    h('ul', { class: 'mb-0 ps-3' }, notes.map((n) => h('li', {}, n))),
+  );
 
   // Risk
   const risks = p.riskDetections;
@@ -386,31 +679,7 @@ function renderProfile(p) {
     ),
   );
 
-  // MFA
-  const mfa = p.mfa;
-  stat($('#mfaStat'), mfa.status === 'ok' && mfa.data ? mfa.data.methodsRegistered.length : null, 'methods registered', a.mfa);
-  detailBody('mfaDetails').replaceChildren(
-    sectionOr(mfa, (m) =>
-      !m
-        ? emptyState('No MFA registration details for this user.')
-        : kv([
-            ['MFA registered', yesNo(m.isMfaRegistered)],
-            ['MFA capable', yesNo(m.isMfaCapable)],
-            ['Passwordless capable', yesNo(m.isPasswordlessCapable)],
-            ['SSPR registered', yesNo(m.isSsprRegistered)],
-            ['Default MFA method', methodLabel(m.defaultMfaMethod)],
-            ['User preferred method', methodLabel(m.userPreferredMethod)],
-            ['System preferred', m.systemPreferredMethods.map(methodLabel).join(', ')],
-            [
-              'Methods registered',
-              m.methodsRegistered.length
-                ? h('div', { class: 'd-flex flex-wrap gap-1' }, m.methodsRegistered.map((x) => h('span', { class: 'badge text-bg-secondary' }, methodLabel(x))))
-                : 'None',
-            ],
-            ['Report updated', fmtDate(m.lastUpdatedDateTime)],
-          ]),
-    ),
-  );
+  renderAuthentication(p, a);
 
   // Pwned / HIBP
   const hibp = p.hibp;
@@ -440,29 +709,8 @@ function renderProfile(p) {
     ),
   );
 
-  // Sign-ins
-  const signIns = p.signIns;
-  stat($('#signInStat'), signIns.status === 'ok' ? signIns.data.length : null, 'sign-ins (30 days)', {
-    level: signIns.status !== 'ok' ? 'unknown' : signIns.data.some((s) => !s.succeeded) ? 'warning' : 'good',
-    label: signIns.status !== 'ok' ? 'Unavailable' : `${signIns.data.filter((s) => !s.succeeded).length} failed`,
-  });
-  detailBody('signInDetails').replaceChildren(
-    sectionOr(signIns, (list) =>
-      list.length === 0
-        ? emptyState('No sign-ins in the last 30 days.')
-        : table(
-            ['Time', 'Application', 'Result', 'Location', 'Device', 'Conditional Access'],
-            list.map((s) => [
-              h('span', { class: 'text-nowrap' }, fmtDate(s.createdDateTime)),
-              h('div', {}, s.appDisplayName, h('div', { class: 'small text-body-secondary' }, s.clientAppUsed)),
-              s.succeeded ? levelBadge('good', 'Success') : h('div', {}, levelBadge('danger', 'Failure'), h('div', { class: 'small text-body-secondary mt-1' }, s.failureReason)),
-              h('div', {}, dash(s.location), h('div', { class: 'small text-body-secondary' }, s.ipAddress)),
-              h('div', {}, [s.operatingSystem, s.browser].filter(Boolean).join(' · ') || '—', h('div', { class: 'small text-body-secondary' }, s.deviceTrustType || 'Not joined/registered')),
-              dash(s.conditionalAccessStatus),
-            ]),
-          ),
-    ),
-  );
+  renderSignIns(p);
+  renderCredentialChanges(p, a);
 
   // SSPR
   const sspr = p.sspr;
@@ -519,6 +767,10 @@ function renderProfile(p) {
           ),
     ),
   );
+
+  renderPrivilege(p, a);
+  renderOwnership(p, a);
+  renderGuestsAndMembership(p, a);
 }
 
 function showProfileView(show) {

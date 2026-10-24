@@ -146,6 +146,10 @@ body {
   color: var(--lvl);
   background: color-mix(in srgb, var(--lvl) 14%, transparent);
   border: 1px solid color-mix(in srgb, var(--lvl) 35%, transparent);
+  /* check labels can be a sentence – let them wrap on phones instead of overflowing */
+  white-space: normal;
+  text-align: start;
+  max-width: 100%;
 }
 .check-row .progress { height: 0.5rem; background: var(--msu-gauge-track); }
 .check-row .progress-bar { background: var(--lvl); }

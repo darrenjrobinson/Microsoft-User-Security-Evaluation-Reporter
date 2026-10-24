@@ -55,6 +55,7 @@ jobs:
       AUTH_CLIENT_ID: ${{ vars.AUTH_CLIENT_ID }}
       HIBP_ENABLED: ${{ vars.HIBP_ENABLED || 'false' }}
       APP_SKU: ${{ vars.APP_SKU || 'P0v3' }}
+      POLICY_JSON: ${{ vars.POLICY_JSON }}
     steps:
       - uses: actions/checkout@v4
 

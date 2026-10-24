@@ -17,7 +17,8 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "sync:atlas": "node scripts/sync-graph-atlas.mjs"
   },
   "dependencies": {
     "@azure/identity": "^4.14.0",
