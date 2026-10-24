@@ -11,6 +11,13 @@ updates:
       development:
         dependency-type: development
         update-types: [minor, patch]
+    ignore:
+      # Node types follow the runtime (.nvmrc and App Service NODE|24-lts); move them with the runtime
+      - dependency-name: '@types/node'
+        update-types: [version-update:semver-major]
+      # typescript-eslint supports TypeScript <6.1 only; remove once it supports newer versions (ESLint crashes on 7.x)
+      - dependency-name: typescript
+        versions: ['>=6.1']
 
   - package-ecosystem: github-actions
     directory: /
