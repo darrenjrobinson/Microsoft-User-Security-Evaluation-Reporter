@@ -49,6 +49,8 @@ export function buildCredentialChanges(
 
   if (audits.status === 'ok') {
     for (const a of audits.data) {
+      // A failed registration didn't change anything
+      if (a.result && a.result !== 'success') continue;
       const user = a.initiatedBy?.user;
       events.push({
         dateTime: a.activityDateTime,
@@ -76,7 +78,7 @@ export function buildCredentialChanges(
 
   // Risky moments to correlate against: active detections and risky sign-ins
   const riskyMoments = [
-    ...(risks.status === 'ok' ? risks.data.filter((r) => ACTIVE_RISK.has(r.state)).map((r) => ({ at: Date.parse(r.detectedDateTime), what: r.typeLabel })) : []),
+    ...(risks.status === 'ok' ? risks.data.filter((r) => ACTIVE_RISK.has(r.state)).map((r) => ({ at: Date.parse(r.activityDateTime ?? r.detectedDateTime), what: r.typeLabel })) : []),
     ...signIns.filter((s) => s.riskLevel === 'medium' || s.riskLevel === 'high').map((s) => ({ at: Date.parse(s.createdDateTime), what: `${s.riskLevel}-risk sign-in` })),
   ];
   for (const e of events) {
@@ -91,6 +93,8 @@ export function buildCredentialChanges(
   }
 
   events.sort((a, b) => b.dateTime.localeCompare(a.dateTime));
-  const suspiciousDetections = risks.status === 'ok' ? risks.data.filter((r) => r.type === 'suspiciousCredentialAddition') : [];
+  // Remediated or dismissed detections stay in the risk history but no longer signal persistence
+  const suspiciousDetections =
+    risks.status === 'ok' ? risks.data.filter((r) => r.type === 'suspiciousCredentialAddition' && ACTIVE_RISK.has(r.state)) : [];
   return ok({ events, suspiciousDetections });
 }

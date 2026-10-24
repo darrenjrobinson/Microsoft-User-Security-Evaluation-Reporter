@@ -8,6 +8,8 @@ export interface GraphRiskDetection {
   riskState: string;
   riskDetail?: string;
   detectedDateTime: string;
+  /** When the risky activity happened – offline detections can land days later */
+  activityDateTime?: string;
   userId: string;
   userDisplayName?: string;
   userPrincipalName?: string;
@@ -23,6 +25,7 @@ export interface RiskDetectionView {
   level: string;
   state: string;
   detectedDateTime: string;
+  activityDateTime: string | null;
   userId: string;
   userDisplayName: string;
   userPrincipalName: string;
@@ -76,6 +79,7 @@ export function toRiskView(d: GraphRiskDetection): RiskDetectionView {
     level: d.riskLevel,
     state: d.riskState,
     detectedDateTime: d.detectedDateTime,
+    activityDateTime: d.activityDateTime ?? null,
     userId: d.userId,
     userDisplayName: d.userDisplayName ?? '',
     userPrincipalName: d.userPrincipalName ?? '',

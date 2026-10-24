@@ -1,4 +1,5 @@
 import type { GraphClient, GraphResponse } from '../graph/client.js';
+import { allPages } from '../graph/paging.js';
 import { queries } from '../graph/queries.js';
 import type { Policy } from '../policy.js';
 import {
@@ -36,7 +37,7 @@ import { buildCaPosture, type CaPostureView } from './caPosture.js';
 import { buildCredentialChanges, type CredentialChangesView } from './credentialChanges.js';
 import type { HibpLookup, HibpView } from './hibp.js';
 import { buildIdentity, type IdentityView } from './identity.js';
-import { buildPrivilege, isPrivileged, type PrivilegeView } from './privilege.js';
+import { buildPrivilege, isPrivileged, type GroupRoleResponses, type PrivilegeView } from './privilege.js';
 import {
   buildGuests,
   buildMembership,
@@ -253,12 +254,41 @@ function tenantNotes(
   return notes;
 }
 
+// Each group costs three lookups; six keeps the follow-up inside one 20-request batch
+const MAX_ROLE_GROUPS = 6;
+// Inventories that can run past one page
+const PAGED = ['ownedObjects', 'sponsorOf', 'memberOf', 'guestInvites', 'methodAudits'] as const;
+
+/** Roles held through the role-assignable groups the user is a direct member of (they can't be nested). */
+async function groupRoles(graph: GraphClient, memberOf: { res: GraphResponse | undefined; complete: boolean }): Promise<{ results: GroupRoleResponses[]; gaps: string[] }> {
+  const gaps: string[] = [];
+  if (!isOk(memberOf.res)) return { results: [], gaps: ["Roles held through role-assignable groups couldn't be checked: group memberships are unavailable."] };
+  if (!memberOf.complete) gaps.push('Group memberships were truncated, so roles held through some groups may be missing.');
+  const groups = valueOf<Any>(memberOf.res!).filter((o) => o['@odata.type'] === '#microsoft.graph.group' && o.isAssignableToRole);
+  const checked = groups.slice(0, MAX_ROLE_GROUPS);
+  if (groups.length > checked.length) gaps.push(`Only ${checked.length} of ${groups.length} role-assignable groups were checked for roles.`);
+  if (checked.length === 0) return { results: [], gaps };
+  const responses = await graph.batch(queries.groupRoleBatch(checked.map((g) => String(g.id)))).catch(() => null);
+  if (!responses) return { results: [], gaps: [...gaps, "Roles held through role-assignable groups couldn't be read."] };
+  const results = checked.map((g) => {
+    const id = String(g.id).toLowerCase();
+    return {
+      groupName: str(g.displayName) || id,
+      schedules: responses.get(`${id}:roleSchedules`),
+      assignments: responses.get(`${id}:roleAssignments`),
+      eligibilities: responses.get(`${id}:roleEligibilities`),
+    };
+  });
+  return { results, gaps };
+}
+
 export function createProfileService(graph: GraphClient, hibp: HibpLookup, policy: Policy) {
   const getTenantContext = createTenantContext(graph);
 
   return async function getUserProfile(userId: string): Promise<UserProfile> {
+    const batch = queries.userProfileBatch(userId);
     const [responses, beta, tenantContext] = await Promise.all([
-      graph.batch(queries.userProfileBatch(userId)),
+      graph.batch(batch),
       // beta is the only source of per-sign-in authentication methods; failure just leaves usage unconfirmed
       graph.batch(queries.userAuthSignInsBeta(userId), { version: 'beta' }).catch(() => new Map<string, GraphResponse>()),
       getTenantContext().catch((): Section<TenantContextView> => ({ status: 'unavailable', reason: 'error', message: 'Tenant policies could not be read.' })),
@@ -271,6 +301,15 @@ export function createProfileService(graph: GraphClient, hibp: HibpLookup, polic
     }
     const rawUser = userRes.body as Any;
     const user = toUser(rawUser);
+
+    const [owned, sponsorOf, memberOf, guestInvites, methodAudits] = await Promise.all(
+      PAGED.map((id) => allPages(graph, batch.find((r) => r.id === id)!, responses.get(id))),
+    );
+    const account = user.mail || user.userPrincipalName;
+    const [roleGroups, hibpResult] = await Promise.all([
+      groupRoles(graph, memberOf!),
+      hibp(account).catch((): Section<HibpView> => ({ status: 'unavailable', reason: 'error', message: 'Have I Been Pwned lookup failed.' })),
+    ]);
 
     const riskDetections = section(responses.get('riskDetections'), (r) =>
       valueOf<GraphRiskDetection>(r).sort(byNewest).map(toRiskView),
@@ -312,12 +351,13 @@ export function createProfileService(graph: GraphClient, hibp: HibpLookup, polic
       { schedules: responses.get('roleSchedules'), assignments: responses.get('roleAssignments'), eligibilities: responses.get('roleEligibilities') },
       user.id,
       policy,
+      roleGroups,
     );
-    const ownership = buildOwnership(responses.get('ownedObjects'), policy);
-    const guests = buildGuests(responses.get('sponsorOf'), responses.get('guestInvites'));
-    const membership = buildMembership(responses.get('memberOf'), responses.get('transitiveGroups'), policy);
+    const ownership = buildOwnership(owned!, policy);
+    const guests = buildGuests(sponsorOf!, guestInvites!);
+    const membership = buildMembership(memberOf!, responses.get('transitiveGroups'), policy);
     const credentialChanges = buildCredentialChanges(
-      section(responses.get('methodAudits'), (r) => valueOf<Any>(r)),
+      section(methodAudits!.res, (r) => valueOf<Any>(r)),
       authMethods,
       riskDetections,
       (betaSignIns ?? v1SignIns ?? []).map((s) => ({ createdDateTime: str(s.createdDateTime), riskLevel: str(s.riskLevelDuringSignIn) })),
@@ -329,14 +369,10 @@ export function createProfileService(graph: GraphClient, hibp: HibpLookup, polic
       : unavailableFrom(responses.get('signIns'));
 
     const identity = buildIdentity({ ...user, raw: rawUser }, policy, {
-      isPrivileged: isPrivileged(privilege),
-      inBreakGlassGroup: inBreakGlassGroup(responses.get('memberOf'), policy),
+      // Owning a role-assignable group means being able to add yourself to its roles
+      isPrivileged: isPrivileged(privilege) || (ownership.status === 'ok' && (ownership.data.counts.roleAssignableGroup ?? 0) > 0),
+      inBreakGlassGroup: inBreakGlassGroup(memberOf!.res, policy),
     });
-
-    const account = user.mail || user.userPrincipalName;
-    const hibpResult = await hibp(account).catch(
-      (): Section<HibpView> => ({ status: 'unavailable', reason: 'error', message: 'Have I Been Pwned lookup failed.' }),
-    );
 
     const credentialCheck = assessCredentialChanges(credentialChanges, identity);
     const weighted = {

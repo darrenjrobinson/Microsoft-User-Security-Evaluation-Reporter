@@ -170,6 +170,21 @@ export const queries = {
     ];
   },
 
+  /**
+   * Role assignments held by role-assignable groups the user belongs to. Directory roles granted through a group
+   * name the group, not the member, as principal. (Role-assignable groups can't contain other groups.)
+   */
+  groupRoleBatch: (groupIds: string[]): GraphRequest[] =>
+    groupIds.flatMap((groupId) => {
+      const id = assertObjectId(groupId);
+      const filter = `principalId eq '${id}'`;
+      return [
+        { id: `${id}:roleSchedules`, method: 'GET' as const, url: `/roleManagement/directory/roleAssignmentScheduleInstances?${q({ $filter: filter, $expand: 'roleDefinition' })}` },
+        { id: `${id}:roleAssignments`, method: 'GET' as const, url: `/roleManagement/directory/roleAssignments?${q({ $filter: filter, $expand: 'roleDefinition' })}` },
+        { id: `${id}:roleEligibilities`, method: 'GET' as const, url: `/roleManagement/directory/roleEligibilityScheduleInstances?${q({ $filter: filter, $expand: 'roleDefinition' })}` },
+      ];
+    }),
+
   /** Sign-ins with authenticationDetails (beta only) – the evidence for which methods are actually used. */
   userAuthSignInsBeta: (userId: string, now = new Date()): GraphRequest[] => {
     const id = assertObjectId(userId);

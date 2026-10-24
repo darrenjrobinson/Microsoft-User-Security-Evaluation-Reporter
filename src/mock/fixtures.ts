@@ -397,6 +397,7 @@ const ROLES = {
   userAdmin: { id: 'fe930be7-5e62-47db-91af-98c3a49a38b1', displayName: 'User Administrator' },
   groupsAdmin: { id: 'fdd7a751-b60b-444a-984c-02652fe8fa1c', displayName: 'Groups Administrator' },
   messageCenterReader: { id: '790c1fb9-7f7d-4f88-86a1-ef1f95c05c1b', displayName: 'Message Center Reader' },
+  privAuthAdmin: { id: '7be44c8a-adaf-4e2a-84d6-ab2649e08a13', displayName: 'Privileged Authentication Administrator' },
 };
 type RoleKey = keyof typeof ROLES;
 const roleDefinition = (k: RoleKey) => ({ ...ROLES[k], templateId: ROLES[k].id, isBuiltIn: true });
@@ -451,6 +452,16 @@ export const roleEligibilities: Record<string, unknown[]> = {
 
 export const TIER0_GROUP = '7e1e0000-0000-4000-8000-000000000001';
 export const FINANCE_GROUP = '7e1e0000-0000-4000-8000-000000000002';
+
+// Roles held by a role-assignable group are listed under the group as principal, not its members
+roleSchedules[TIER0_GROUP] = [activeRole(TIER0_GROUP, 'privAuthAdmin')];
+roleAssignments[TIER0_GROUP] = roleSchedules[TIER0_GROUP]!.map(({ id, principalId, roleDefinitionId, directoryScopeId, roleDefinition: def }) => ({
+  id,
+  principalId,
+  roleDefinitionId,
+  directoryScopeId,
+  roleDefinition: def,
+}));
 
 const group = (id: string, displayName: string, kind: 'security' | 'unified' | 'mail' = 'security', extra: Record<string, unknown> = {}) => ({
   '@odata.type': '#microsoft.graph.group',
@@ -549,6 +560,8 @@ export const methodAudits: Record<string, unknown[]> = {
     // A temporary helpdesk account registered a phone for Rick, then it became his default method
     audit(RICK, 3, 'Admin registered security info', { user: { id: 'f00dbabe-0000-4000-8000-000000000666', userPrincipalName: 'helpdesk.temp@contoso.example' } }, 'Authentication Methods', 9),
     audit(RICK, 3, 'User changed default security info', self(RICK), 'Authentication Methods', 9),
+    // Failed operations changed nothing and must not count as credential changes
+    { ...audit(RICK, 4, 'Admin registered security info', { app: { displayName: 'Unknown app' } }), result: 'failure' },
   ],
   [MORTY]: [audit(MORTY, 20, 'User registered security info', self(MORTY))],
   [BETH]: [audit(BETH, 1, 'Admin registered security info', { app: { displayName: 'Microsoft Entra admin center' } })],
@@ -556,7 +569,10 @@ export const methodAudits: Record<string, unknown[]> = {
 
 export const guestInvites: Record<string, unknown[]> = {
   [RICK]: [1, 2].map((i) => audit(guest(100 + i).id, 5 + i, 'Invite external user', self(RICK), 'Invited Users')),
-  [BETH]: Array.from({ length: 20 }, (_, i) => audit(guest(200 + i).id, (i % 25) + 1, 'Invite external user', self(BETH), 'Invited Users', 8 + (i % 8))),
+  [BETH]: [
+    ...Array.from({ length: 20 }, (_, i) => audit(guest(200 + i).id, (i % 25) + 1, 'Invite external user', self(BETH), 'Invited Users', 8 + (i % 8))),
+    { ...audit(guest(299).id, 2, 'Invite external user', self(BETH), 'Invited Users'), result: 'failure' },
+  ],
 };
 
 export const authMethodsPolicy = {

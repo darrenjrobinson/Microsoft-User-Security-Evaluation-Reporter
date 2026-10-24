@@ -1,4 +1,5 @@
 import type { GraphResponse } from '../graph/client.js';
+import type { Paged } from '../graph/paging.js';
 import type { Policy } from '../policy.js';
 import { isOk, ok, unavailableFrom, valueOf, type Section } from './section.js';
 
@@ -21,13 +22,19 @@ export interface OwnedObjectView {
 export interface OwnershipView {
   objects: OwnedObjectView[];
   counts: Partial<Record<OwnedKind, number>>;
+  /** False when more pages exist than were read – counts are lower bounds */
+  complete: boolean;
 }
 
 export interface GuestGovernanceView {
   sponsored: { id: string; displayName: string; userPrincipalName: string }[] | null;
   invites: { id: string; activityDateTime: string; invitee: string }[] | null;
-  /** Distinct guests sponsored or invited in the last 30 days */
+  /** Distinct guests sponsored or successfully invited in the last 30 days */
   footprint: number;
+  /** False when a source was unavailable or truncated – footprint is a lower bound */
+  complete: boolean;
+  /** Why the footprint may be incomplete */
+  gaps: string[];
 }
 
 export interface MembershipView {
@@ -40,6 +47,8 @@ export interface MembershipView {
   sensitiveGroups: { id: string; displayName: string }[];
   /** Thresholds this user exceeds, for display */
   exceeded: string[];
+  /** False when more memberships exist than were read – counts are lower bounds */
+  complete: boolean;
 }
 
 const typeOf = (o: Any) => String(o['@odata.type'] ?? '').replace(/^#microsoft\.graph\./, '');
@@ -61,7 +70,7 @@ function ownedKind(o: Any): OwnedKind {
   return 'other';
 }
 
-export function buildOwnership(res: GraphResponse | undefined, policy: Policy): Section<OwnershipView> {
+export function buildOwnership({ res, complete }: Paged, policy: Policy): Section<OwnershipView> {
   if (!isOk(res)) {
     const why = unavailableFrom(res);
     // Graph documents /users/{id}/ownedObjects as delegated-only, so an app-only token may be refused
@@ -77,29 +86,48 @@ export function buildOwnership(res: GraphResponse | undefined, policy: Policy): 
   }));
   const counts: Partial<Record<OwnedKind, number>> = {};
   for (const o of objects) counts[o.kind] = (counts[o.kind] ?? 0) + 1;
-  return ok({ objects, counts });
+  return ok({ objects, counts, complete });
 }
 
-export function buildGuests(sponsorOf: GraphResponse | undefined, invites: GraphResponse | undefined): Section<GuestGovernanceView> {
-  if (!isOk(sponsorOf) && !isOk(invites)) return unavailableFrom(sponsorOf ?? invites);
-  const sponsored = isOk(sponsorOf)
-    ? valueOf<Any>(sponsorOf!)
-        .filter((o) => typeOf(o) === 'user')
-        .map((u) => ({ id: str(u.id), displayName: str(u.displayName), userPrincipalName: str(u.userPrincipalName) }))
-    : null;
-  const inviteList = isOk(invites)
-    ? valueOf<Any>(invites!)
-        .map((a) => {
-          const t = a.targetResources?.[0] ?? {};
-          return { id: str(t.id), activityDateTime: str(a.activityDateTime), invitee: str(t.userPrincipalName) || str(t.displayName) || str(t.id) };
-        })
-        .sort((a, b) => b.activityDateTime.localeCompare(a.activityDateTime))
-    : null;
+const succeeded = (a: Any) => !a.result || a.result === 'success';
+
+export function buildGuests(sponsorOf: Paged, invites: Paged): Section<GuestGovernanceView> {
+  if (!isOk(sponsorOf.res) && !isOk(invites.res)) return unavailableFrom(sponsorOf.res ?? invites.res);
+  const gaps: string[] = [];
+  let sponsored: GuestGovernanceView['sponsored'] = null;
+  if (isOk(sponsorOf.res)) {
+    sponsored = valueOf<Any>(sponsorOf.res!)
+      .filter((o) => typeOf(o) === 'user')
+      .map((u) => ({ id: str(u.id), displayName: str(u.displayName), userPrincipalName: str(u.userPrincipalName) }));
+    if (!sponsorOf.complete) gaps.push('Only the first pages of sponsored guests were read.');
+  } else {
+    const why = unavailableFrom(sponsorOf.res);
+    // Graph documents /users/{id}/sponsorOf as delegated-only
+    gaps.push(
+      why.reason === 'forbidden'
+        ? "Guests this user sponsors aren't available to the app's managed identity (application permissions)."
+        : `Guests this user sponsors couldn't be read: ${why.message}`,
+    );
+  }
+  let inviteList: GuestGovernanceView['invites'] = null;
+  if (isOk(invites.res)) {
+    // A failed invitation didn't bring a guest in
+    inviteList = valueOf<Any>(invites.res!)
+      .filter(succeeded)
+      .map((a) => {
+        const t = a.targetResources?.[0] ?? {};
+        return { id: str(t.id), activityDateTime: str(a.activityDateTime), invitee: str(t.userPrincipalName) || str(t.displayName) || str(t.id) };
+      })
+      .sort((a, b) => b.activityDateTime.localeCompare(a.activityDateTime));
+    if (!invites.complete) gaps.push('Only the first pages of guest invitations were read.');
+  } else {
+    gaps.push(`Guest invitations couldn't be read: ${unavailableFrom(invites.res).message}`);
+  }
   const ids = new Set([...(sponsored ?? []).map((s) => s.id), ...(inviteList ?? []).map((i) => i.id || i.invitee)]);
-  return ok({ sponsored, invites: inviteList, footprint: ids.size });
+  return ok({ sponsored, invites: inviteList, footprint: ids.size, complete: gaps.length === 0, gaps });
 }
 
-export function buildMembership(memberOf: GraphResponse | undefined, transitive: GraphResponse | undefined, policy: Policy): Section<MembershipView> {
+export function buildMembership({ res: memberOf, complete }: Paged, transitive: GraphResponse | undefined, policy: Policy): Section<MembershipView> {
   if (!isOk(memberOf)) return unavailableFrom(memberOf);
   const items = valueOf<Any>(memberOf!);
   const groups = items.filter((o) => typeOf(o) === 'group');
@@ -114,6 +142,7 @@ export function buildMembership(memberOf: GraphResponse | undefined, transitive:
     roleAssignableGroups: groups.filter((g) => g.isAssignableToRole).map(named),
     sensitiveGroups: groups.filter((g) => policy.sensitiveGroupIds.includes(str(g.id).toLowerCase())).map(named),
     exceeded: [],
+    complete,
   };
   const t = policy.membershipThresholds;
   if (view.directGroups > t.directGroups) view.exceeded.push(`${view.directGroups} direct groups (review above ${t.directGroups})`);

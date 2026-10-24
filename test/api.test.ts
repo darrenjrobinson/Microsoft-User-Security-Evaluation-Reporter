@@ -87,7 +87,8 @@ describe('API', () => {
     expect(res.body.hibp.data.breaches).toHaveLength(2);
     expect(res.body.signIns.data).toHaveLength(4);
     expect(res.body.signIns.data[0].authMethods).toEqual(['Password', 'Text message']);
-    expect(graph.calls).toHaveLength(17 + 1 + 2);
+    // + Rick is in one role-assignable group, so its roles are looked up in a follow-up batch
+    expect(graph.calls).toHaveLength(17 + 1 + 2 + 3);
     expect(graph.calls.filter((c) => c.startsWith('/beta/'))).toEqual([expect.stringMatching(/^\/beta\/auditLogs\/signIns\?/)]);
 
     // tenant policies are read once, not per profile
@@ -98,14 +99,19 @@ describe('API', () => {
   it('explains a risky privileged account', async () => {
     const { body } = await get(`/api/users/${RICK}/profile`).expect(200);
     expect(body.identity).toMatchObject({ isPrivileged: true, isBreakGlass: false, licensedWorkloads: ['Mailbox', 'Teams', 'SharePoint / OneDrive'] });
-    expect(body.assessment.overall.reasons).toContain('1 permanently active high-impact role');
+    expect(body.assessment.overall.reasons).toContain('2 permanently active high-impact roles');
     expect(body.authStrength.data.verdict).toBe('phishable');
-    expect(body.privilege.data.assignments.map((a: { roleName: string; state: string }) => `${a.roleName}:${a.state}`)).toEqual([
-      'Global Administrator:permanentActive',
-      'Exchange Administrator:timeBoundActive',
-      'Security Administrator:eligible',
-      'Message Center Reader:permanentActive',
+    expect(body.privilege.data.assignments.map((a: { roleName: string; state: string; groupName: string }) => `${a.roleName}:${a.state}:${a.groupName}`)).toEqual([
+      'Global Administrator:permanentActive:',
+      'Privileged Authentication Administrator:permanentActive:Tier 0 Admins',
+      'Exchange Administrator:timeBoundActive:',
+      'Security Administrator:eligible:',
+      'Message Center Reader:permanentActive:',
     ]);
+    // time-bound direct assignments of required-PIM roles are drift too
+    expect(body.assessment.pimDrift.label).toBe('PIM required, but 3 roles actively assigned');
+    // the failed "Admin registered security info" operation isn't a change
+    expect(body.credentialChanges.data.events.filter((e: { activity: string }) => e.activity === 'Admin registered security info')).toHaveLength(1);
     expect(body.assessment.pimDrift.level).toBe('warning');
     expect(body.assessment.ownership).toMatchObject({ level: 'danger', label: 'Owns 1 role-assignable group' });
     expect(body.ownership.data.counts).toMatchObject({ application: 1, servicePrincipal: 1, agent: 1 });

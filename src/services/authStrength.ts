@@ -139,7 +139,10 @@ export function buildAuthStrength(
   const reg = mfa.status === 'ok' ? mfa.data : null;
   const inv = methods.status === 'ok' ? methods.data : null;
   const obs = observed.status === 'ok' ? observed.data : null;
-  if (!reg && !inv && !obs) return mfa.status !== 'ok' ? mfa : methods.status !== 'ok' ? methods : { status: 'unavailable', reason: 'notFound', message: 'No authentication data for this user.' };
+  // An empty sign-in observation proves nothing about what is registered
+  if (!reg && !inv && !obs?.total) {
+    return mfa.status !== 'ok' ? mfa : methods.status !== 'ok' ? methods : { status: 'unavailable', reason: 'notFound', message: 'No authentication data for this user.' };
+  }
 
   const prRegistered = !!inv?.some((m) => m.kind === 'phishingResistant') || !!reg?.methodsRegistered.some((m) => PR_REGISTRATION.has(m));
   const passwordlessCapable = prRegistered || !!reg?.isPasswordlessCapable;

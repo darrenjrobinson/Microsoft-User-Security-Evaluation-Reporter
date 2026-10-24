@@ -63,6 +63,7 @@ const role = (over: Partial<RoleAssignmentView>): RoleAssignmentView => ({
   scope: 'Tenant',
   state: 'permanentActive',
   via: 'direct',
+  groupName: '',
   endDateTime: null,
   impact: 'high',
   themes: [],
@@ -71,7 +72,8 @@ const role = (over: Partial<RoleAssignmentView>): RoleAssignmentView => ({
   pimDrift: false,
   ...over,
 });
-const privilege = (assignments: RoleAssignmentView[], over: Partial<PrivilegeView> = {}) => ok({ assignments, pimDetail: true, isPimException: false, ...over });
+const privilege = (assignments: RoleAssignmentView[], over: Partial<PrivilegeView> = {}) =>
+  ok<PrivilegeView>({ assignments, pimDetail: true, isPimException: false, gaps: [], ...over });
 
 const detection = (state: string, type = 'anonymizedIPAddress') => ({ state, type }) as RiskDetectionView;
 const policy = parsePolicy();
@@ -95,6 +97,12 @@ describe('assessment', () => {
       observed: { total: 2, counts: { phishingResistant: 0, passwordless: 0, passwordPlusMfa: 0, passwordPlusWeakMfa: 2, singleFactor: 0 }, methods: [] },
     });
     expect(assessAuthStrength(ok(stillWeak), identity()).level).toBe('warning');
+    // password + push is phishable too
+    const pushOnly = auth({
+      verdict: 'passwordlessCapable',
+      observed: { total: 3, counts: { phishingResistant: 0, passwordless: 0, passwordPlusMfa: 3, passwordPlusWeakMfa: 0, singleFactor: 0 }, methods: [] },
+    });
+    expect(assessAuthStrength(ok(pushOnly), identity()).level).toBe('warning');
     expect(assessAuthStrength(ok(auth({})), identity({ accountType: 'B2B' })).level).toBe('info');
   });
 
@@ -114,8 +122,17 @@ describe('assessment', () => {
     expect(assessPrivilege({ status: 'unavailable', reason: 'forbidden', message: '' }, identity()).level).toBe('unknown');
   });
 
+  it('never reports a clean role inventory when a lookup failed', () => {
+    const gaps = ["Eligible (PIM) roles for this user couldn't be read"];
+    expect(assessPrivilege(privilege([], { gaps }), identity())).toMatchObject({ level: 'unknown', label: 'Role inventory incomplete' });
+    // what was found still counts
+    expect(assessPrivilege(privilege([role({})], { gaps }), identity()).level).toBe('danger');
+    expect(assessPimDrift(privilege([], { gaps })).level).toBe('unknown');
+  });
+
   it('reports PIM drift as a separate overlay', () => {
     expect(assessPimDrift(privilege([role({ pimDrift: true })])).level).toBe('warning');
+    expect(assessPimDrift(privilege([role({ pimDrift: true, state: 'timeBoundActive' })])).label).toBe('PIM required, but 1 role actively assigned');
     expect(assessPimDrift(privilege([role({ state: 'eligible' })])).level).toBe('good');
     expect(assessPimDrift(privilege([role({})], { pimDetail: false })).level).toBe('info');
     expect(assessPimDrift(privilege([role({})], { isPimException: true })).level).toBe('info');
@@ -126,24 +143,29 @@ describe('assessment', () => {
       const objects = kinds.map((kind, i) => ({ id: `o${i}`, displayName: `o${i}`, kind, sensitive: false }));
       const counts: OwnershipView['counts'] = {};
       for (const o of objects) counts[o.kind] = (counts[o.kind] ?? 0) + 1;
-      return { objects, counts };
+      return { objects, counts, complete: true };
     };
     expect(assessOwnership(ok(owned([]))).level).toBe('good');
     expect(assessOwnership(ok(owned(['team', 'securityGroup']))).level).toBe('info');
     expect(assessOwnership(ok(owned(['application', 'agent']))).label).toBe('Owns 1 app and 1 agent identity');
     expect(assessOwnership(ok(owned(['roleAssignableGroup']))).level).toBe('danger');
+    expect(assessOwnership(ok({ ...owned(['team']), complete: false }))).toMatchObject({ level: 'warning', label: 'Owns at least 1 group (list truncated)' });
   });
 
   it('applies guest and membership thresholds, escalating for privileged users', () => {
-    const guests = (footprint: number) => ok({ sponsored: [], invites: [], footprint });
+    const guests = (footprint: number, complete = true) => ok({ sponsored: [], invites: [], footprint, complete, gaps: [] });
     expect(assessGuestGovernance(guests(0), identity(), policy).level).toBe('good');
     expect(assessGuestGovernance(guests(3), identity(), policy).level).toBe('info');
     expect(assessGuestGovernance(guests(12), identity(), policy).level).toBe('warning');
     expect(assessGuestGovernance(guests(12), identity({ isPrivileged: true }), policy).level).toBe('danger');
+    // a lower bound can confirm a threshold is crossed, never that it isn't
+    expect(assessGuestGovernance(guests(0, false), identity(), policy).level).toBe('info');
+    expect(assessGuestGovernance(guests(12, false), identity(), policy).label).toBe('At least 12 guests sponsored or invited');
 
-    const membership = (directGroups: number, exceeded: string[] = []) =>
-      ok({ directGroups, transitiveGroups: null, m365Groups: 0, adminUnits: [], directoryRoles: [], roleAssignableGroups: [], sensitiveGroups: [], exceeded });
+    const membership = (directGroups: number, exceeded: string[] = [], complete = true) =>
+      ok({ directGroups, transitiveGroups: null, m365Groups: 0, adminUnits: [], directoryRoles: [], roleAssignableGroups: [], sensitiveGroups: [], exceeded, complete });
     expect(assessMembership(membership(5), identity(), policy).level).toBe('good');
+    expect(assessMembership(membership(5, [], false), identity(), policy).level).toBe('info');
     expect(assessMembership(membership(90, ['x']), identity({ isPrivileged: true }), policy).level).toBe('warning');
     expect(assessMembership(membership(200, ['x']), identity({ isPrivileged: true }), policy).level).toBe('danger');
   });
@@ -159,6 +181,8 @@ describe('assessment', () => {
     const quietRisk = { level: 'good' as const, label: '' };
     expect(withCredentialSignal(quietRisk, { level: 'danger', label: '' }).level).toBe('warning');
     expect(withCredentialSignal(quietRisk, { level: 'warning', label: '' }).level).toBe('good');
+    // no P2: Identity Protection is unavailable, but the persistence evidence still counts
+    expect(withCredentialSignal({ level: 'unknown', label: '' }, { level: 'danger', label: '' }).level).toBe('warning');
   });
 
   it('flags privileged daily-driver accounts', () => {
@@ -178,6 +202,9 @@ describe('assessment', () => {
     const view = buildCaPosture(failures, 'v1.0');
     expect(view).toMatchObject({ caFailures: 3, blockedByPolicy: 3 });
     expect(assessCaPosture(view, identity()).level).toBe('warning');
+    // failures alone don't show MFA is enforced
+    const failedOnly = buildCaPosture([signIn('multiFactorAuthentication', 'success', 50126)], 'v1.0');
+    expect(assessCaPosture(failedOnly, identity())).toMatchObject({ level: 'info', label: 'No successful interactive sign-ins (1 failed)' });
   });
 
   it('grades risk by active detection count', () => {

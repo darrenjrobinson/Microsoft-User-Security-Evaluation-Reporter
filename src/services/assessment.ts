@@ -100,12 +100,13 @@ export function assessAuthStrength(auth: Section<AuthStrengthView>, identity: Id
       ? good('Emergency access account protected by phishing-resistant credentials')
       : danger('Emergency access account has no phishing-resistant credential');
   }
-  const weakObserved = !!a.observed && a.observed.counts.singleFactor + a.observed.counts.passwordPlusWeakMfa > 0;
+  // Any sign-in without a phishing-resistant step – password + push and OATH codes are phishable too
+  const phishableObserved = !!a.observed && a.observed.total - a.observed.counts.phishingResistant > 0;
   switch (a.verdict) {
     case 'phishingResistant':
       return good('Phishing-resistant sign-ins observed');
     case 'passwordlessCapable':
-      return weakObserved ? warning('Passwordless-capable, but still signing in with phishable methods') : good('Passwordless-capable (usage not confirmed)');
+      return phishableObserved ? warning('Passwordless-capable, but still signing in with phishable methods') : good('Passwordless-capable (usage not confirmed)');
     case 'phishable':
       return identity.isPrivileged ? danger('Privileged account relies on phishable MFA') : warning('MFA only – phishable methods');
     case 'none':
@@ -134,14 +135,15 @@ export function assessPassword(hibp: Section<HibpView>, detections: Section<Risk
 
 export function assessPrivilege(privilege: Section<PrivilegeView>, identity: IdentityView): Check {
   if (privilege.status !== 'ok') return unknown('Role assignments unavailable');
-  const roles = privilege.data.assignments;
-  if (roles.length === 0) return good('No Entra roles assigned');
+  const { assignments: roles, gaps } = privilege.data;
   const permanentHigh = roles.filter((r) => r.impact === 'high' && r.state === 'permanentActive');
   if (identity.isBreakGlass) return info(`Emergency access account – ${plural(permanentHigh.length, 'permanent high-impact role')} expected`);
   if (permanentHigh.length > 0) return danger(`${plural(permanentHigh.length, 'permanently active high-impact role')}`);
   if (roles.some((r) => r.impact === 'high')) return warning('High-impact roles held through PIM or time-bound');
   if (roles.some((r) => r.impact === 'medium' && r.state !== 'eligible')) return warning('Active administrative roles');
-  return good('Only low-impact or eligible roles');
+  // Nothing risky found – but only say so when every lookup succeeded
+  if (gaps.length > 0) return unknown('Role inventory incomplete');
+  return good(roles.length === 0 ? 'No Entra roles assigned' : 'Only low-impact or eligible roles');
 }
 
 export function assessPimDrift(privilege: Section<PrivilegeView>): Check {
@@ -149,14 +151,15 @@ export function assessPimDrift(privilege: Section<PrivilegeView>): Check {
   const p = privilege.data;
   if (!p.pimDetail) return p.assignments.length ? info('PIM not available – every role is permanently assigned') : good('No Entra roles assigned');
   const drift = p.assignments.filter((a) => a.pimDrift);
-  if (drift.length > 0) return warning(`PIM required, but ${plural(drift.length, 'role')} assigned directly`);
+  if (drift.length > 0) return warning(`PIM required, but ${plural(drift.length, 'role')} actively assigned`);
+  if (p.gaps.length > 0) return unknown('Role inventory incomplete');
   if (p.isPimException && p.assignments.some((a) => a.pimRequired)) return info('Approved exception to the PIM policy');
   return good(p.assignments.some((a) => a.pimRequired) ? 'Required-PIM roles are PIM-governed' : 'No roles that require PIM');
 }
 
 export function assessOwnership(ownership: Section<OwnershipView>): Check {
   if (ownership.status !== 'ok') return unknown('Owned objects unavailable');
-  const { objects, counts } = ownership.data;
+  const { objects, counts, complete } = ownership.data;
   if (objects.length === 0) return good('Owns no apps, agents or groups');
   const roleGroups = counts.roleAssignableGroup ?? 0;
   const agents = counts.agent ?? 0;
@@ -167,16 +170,20 @@ export function assessOwnership(ownership: Section<OwnershipView>): Check {
   if (apps + agents > 0) {
     return warning(`Owns ${[apps && plural(apps, 'app'), agents && plural(agents, 'agent identity', 'agent identities')].filter(Boolean).join(' and ')}`);
   }
+  if (!complete) return warning(`Owns at least ${plural(objects.length, 'group')} (list truncated)`);
   return objects.length > 20 ? warning(`Owns ${objects.length} groups`) : info(`Owns ${plural(objects.length, 'group')}`);
 }
 
 export function assessGuestGovernance(guests: Section<GuestGovernanceView>, identity: IdentityView, policy: Policy): Check {
   if (guests.status !== 'ok') return unknown('Guest relationships unavailable');
-  const n = guests.data.footprint;
+  const { footprint: n, complete } = guests.data;
   const t = policy.guestThresholds;
+  // An incomplete footprint is a lower bound: it can confirm a threshold is crossed, never that it isn't
+  const atLeast = complete ? '' : 'at least ';
+  if (n >= t.danger || (identity.isPrivileged && n >= t.warning)) return danger(`Large guest footprint: ${atLeast}${n} guests sponsored or invited`);
+  if (n >= t.warning) return warning(`${complete ? '' : 'At least '}${n} guests sponsored or invited`);
+  if (!complete) return info(n === 0 ? 'No guest invitations found; sponsorships not checked' : `At least ${plural(n, 'guest')} sponsored or invited`);
   if (n === 0) return good('No guests sponsored or invited');
-  if (n >= t.danger || (identity.isPrivileged && n >= t.warning)) return danger(`Large guest footprint: ${n} guests sponsored or invited`);
-  if (n >= t.warning) return warning(`${n} guests sponsored or invited`);
   return info(`${plural(n, 'guest')} sponsored or invited`);
 }
 
@@ -184,7 +191,10 @@ export function assessMembership(membership: Section<MembershipView>, identity: 
   if (membership.status !== 'ok') return unknown('Group memberships unavailable');
   const m = membership.data;
   const t = policy.membershipThresholds;
-  if (m.exceeded.length === 0) return good(`${plural(m.directGroups, 'group')}${m.transitiveGroups !== null ? ` (${m.transitiveGroups} including nested)` : ''}`);
+  if (m.exceeded.length === 0) {
+    if (!m.complete) return info(`At least ${plural(m.directGroups, 'group')} (list truncated)`);
+    return good(`${plural(m.directGroups, 'group')}${m.transitiveGroups !== null ? ` (${m.transitiveGroups} including nested)` : ''}`);
+  }
   const extreme = m.directGroups > 2 * t.directGroups || (m.transitiveGroups ?? 0) > 2 * t.transitiveGroups;
   if (extreme && identity.isPrivileged) return danger('Extreme membership sprawl on a privileged account');
   return warning('Broad membership footprint to review');
@@ -225,6 +235,8 @@ export function assessCaPosture(ca: CaPostureView | null, identity: IdentityView
   if (ca.unprotected > 0) return warning(`${plural(ca.unprotected, 'single-factor sign-in')} with no Conditional Access applied`);
   if (ca.caFailures >= 3) return warning(`${ca.caFailures} Conditional Access failures`);
   if (ca.singleFactor > 0) return info(`${plural(ca.singleFactor, 'single-factor sign-in')} allowed by policy`);
+  // Failed sign-ins alone say nothing about whether MFA is enforced
+  if (ca.mfaSatisfied === 0) return info(`No successful interactive sign-ins (${ca.total} failed)`);
   return good('MFA enforced on recent sign-ins');
 }
 
@@ -244,7 +256,8 @@ export function assessSspr(events: Section<{ result: string }[]>): Check {
 
 /** A strong persistence signal raises the risk dimension even when Identity Protection hasn't (yet). */
 export function withCredentialSignal(risk: Check, credentialChanges: Check): Check {
-  if (credentialChanges.level === 'danger' && risk.level === 'good') return warning('Suspicious credential change to review');
+  // Also when Identity Protection is unavailable (no P2): the persistence evidence stands on its own
+  if (credentialChanges.level === 'danger' && (risk.level === 'good' || risk.level === 'unknown')) return warning('Suspicious credential change to review');
   return risk;
 }
 

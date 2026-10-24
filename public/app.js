@@ -371,6 +371,12 @@ const checkLine = (name, check) =>
 
 const subheading = (text) => h('h4', { class: 'h6 px-3 pt-3 mb-0' }, text);
 
+/** Lookups that failed or were truncated, so the operator knows the list may be incomplete */
+const gapNote = (gaps) =>
+  gaps.length
+    ? h('div', { class: 'alert alert-warning small m-3 mb-0 d-flex gap-2' }, icon('exclamation-triangle'), h('ul', { class: 'mb-0 ps-3' }, gaps.map((g) => h('li', {}, g))))
+    : null;
+
 function renderAuthentication(p, a) {
   const auth = p.authStrength;
   const mfa = p.mfa;
@@ -445,12 +451,13 @@ function renderPrivilege(p, a) {
         'div',
         { class: 'pt-3' },
         d.pimDetail ? null : h('p', { class: 'small text-body-secondary px-3 mb-2' }, 'PIM schedules are unavailable, so every role is shown as a permanent assignment.'),
+        gapNote(d.gaps),
         d.assignments.length === 0
           ? emptyState('No Entra roles assigned or eligible.', 'shield-check')
           : table(
               ['Role', 'Assignment', 'Impact', 'Reach', 'PIM'],
               d.assignments.map((r) => [
-                h('div', {}, h('div', { class: 'fw-semibold' }, r.roleName), h('div', { class: 'small text-body-secondary' }, [r.scope, r.via === 'group' ? 'via group' : ''].filter(Boolean).join(' · '))),
+                h('div', {}, h('div', { class: 'fw-semibold' }, r.roleName), h('div', { class: 'small text-body-secondary' }, [r.scope, r.via === 'group' ? `via ${r.groupName || 'a group'}` : ''].filter(Boolean).join(' · '))),
                 h(
                   'div',
                   {},
@@ -472,6 +479,7 @@ function renderOwnership(p, a) {
   const own = p.ownership;
   stat($('#ownershipStat'), count(own, (d) => d.objects.length), 'owned object(s)', a.ownership);
   detailBody('ownershipDetails').replaceChildren(
+    sectionOr(own, (d) => (d.complete ? null : gapNote(['Only the first pages of owned objects were read – there are more.']))),
     sectionOr(own, (d) =>
       d.objects.length === 0
         ? emptyState('This user owns no apps, agents or groups.', 'shield-check')
@@ -504,9 +512,10 @@ function renderGuestsAndMembership(p, a) {
       h(
         'div',
         {},
+        gapNote(g.gaps),
         subheading(`Guests sponsored${g.sponsored ? ` (${g.sponsored.length})` : ''}`),
         g.sponsored === null
-          ? emptyState('Sponsorship data unavailable.')
+          ? emptyState('Not available – see the note above.', 'shield-lock')
           : g.sponsored.length === 0
             ? emptyState('Sponsors no guests.')
             : table(['Guest', 'User principal name'], g.sponsored.map((s) => [s.displayName, h('span', { class: 'text-break' }, s.userPrincipalName)]), { wideOnly: [1] }),
@@ -522,7 +531,7 @@ function renderGuestsAndMembership(p, a) {
     checkLine('Memberships', a.membership),
     sectionOr(p.membership, (m) =>
       kv([
-        ['Direct groups', `${m.directGroups} (${m.m365Groups} Microsoft 365)`],
+        ['Direct groups', `${m.complete ? '' : 'At least '}${m.directGroups} (${m.m365Groups} Microsoft 365)`],
         ['Including nested', m.transitiveGroups ?? '—'],
         ['Administrative units', badges(m.adminUnits)],
         ['Active directory roles', badges(m.directoryRoles)],
