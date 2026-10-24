@@ -99,7 +99,7 @@ describe('API', () => {
   it('explains a risky privileged account', async () => {
     const { body } = await get(`/api/users/${RICK}/profile`).expect(200);
     expect(body.identity).toMatchObject({ isPrivileged: true, isBreakGlass: false, licensedWorkloads: ['Mailbox', 'Teams', 'SharePoint / OneDrive'] });
-    expect(body.assessment.overall.reasons).toContain('2 permanently active high-impact roles');
+    expect(body.assessment.overall.reasons).toContain('2 permanently active high-impact roles (Global Administrator, Privileged Authentication Administrator)');
     expect(body.authStrength.data.verdict).toBe('phishable');
     expect(body.privilege.data.assignments.map((a: { roleName: string; state: string; groupName: string }) => `${a.roleName}:${a.state}:${a.groupName}`)).toEqual([
       'Global Administrator:permanentActive:',

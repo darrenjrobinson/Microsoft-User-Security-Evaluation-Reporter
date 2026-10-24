@@ -133,14 +133,22 @@ export function assessPassword(hibp: Section<HibpView>, detections: Section<Risk
   return good('Not found in Have I Been Pwned');
 }
 
+/** "Global Administrator, Exchange Administrator +2 more" – keeps a check label to one readable line */
+function roleNames(roles: { roleName: string }[]): string {
+  const names = [...new Set(roles.map((r) => r.roleName))];
+  return names.length > 2 ? `${names.slice(0, 2).join(', ')} +${names.length - 2} more` : names.join(', ');
+}
+
 export function assessPrivilege(privilege: Section<PrivilegeView>, identity: IdentityView): Check {
   if (privilege.status !== 'ok') return unknown('Role assignments unavailable');
   const { assignments: roles, gaps } = privilege.data;
   const permanentHigh = roles.filter((r) => r.impact === 'high' && r.state === 'permanentActive');
   if (identity.isBreakGlass) return info(`Emergency access account – ${plural(permanentHigh.length, 'permanent high-impact role')} expected`);
-  if (permanentHigh.length > 0) return danger(`${plural(permanentHigh.length, 'permanently active high-impact role')}`);
-  if (roles.some((r) => r.impact === 'high')) return warning('High-impact roles held through PIM or time-bound');
-  if (roles.some((r) => r.impact === 'medium' && r.state !== 'eligible')) return warning('Active administrative roles');
+  if (permanentHigh.length > 0) return danger(`${plural(permanentHigh.length, 'permanently active high-impact role')} (${roleNames(permanentHigh)})`);
+  const high = roles.filter((r) => r.impact === 'high');
+  if (high.length > 0) return warning(`${plural(high.length, 'high-impact role')} through PIM or time-bound (${roleNames(high)})`);
+  const activeMedium = roles.filter((r) => r.impact === 'medium' && r.state !== 'eligible');
+  if (activeMedium.length > 0) return warning(`${plural(activeMedium.length, 'active medium-impact role')} (${roleNames(activeMedium)})`);
   // Nothing risky found – but only say so when every lookup succeeded
   if (gaps.length > 0) return unknown('Role inventory incomplete');
   return good(roles.length === 0 ? 'No Entra roles assigned' : 'Only low-impact or eligible roles');
