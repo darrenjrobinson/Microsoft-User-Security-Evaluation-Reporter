@@ -22,8 +22,8 @@ jobs:
     needs: ci
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -33,7 +33,7 @@ jobs:
         run: npm ci --omit=dev
       - name: Create zip package
         run: zip -qr app.zip dist public node_modules package.json package-lock.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: app
           path: app.zip
@@ -57,9 +57,9 @@ jobs:
       APP_SKU: ${{ vars.APP_SKU || 'P0v3' }}
       POLICY_JSON: ${{ vars.POLICY_JSON }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: azure/login@v2
+      - uses: azure/login@v3
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
@@ -85,7 +85,7 @@ jobs:
           echo "webAppUrl=$(jq -r .webAppUrl.value <<<"$outputs")" >> "$GITHUB_OUTPUT"
           echo "stagingUrl=$(jq -r .stagingUrl.value <<<"$outputs")" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: app
 
