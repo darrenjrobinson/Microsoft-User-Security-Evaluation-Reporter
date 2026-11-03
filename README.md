@@ -56,10 +56,10 @@ The UI follows the original layout, modernised with Bootstrap 5.3, Bootstrap Ico
 ```mermaid
 flowchart LR
   op([Operator]) -->|Entra ID sign-in<br/>MSUser.Operator role| ea[App Service Authentication]
-  subgraph Azure App Service - Linux, Node 24
+  subgraph appsvc["Azure App Service (Linux, Node 24)"]
     ea --> app[Express app<br/>static UI + /api]
   end
-  app -->|Managed identity<br/>fixed queries, JSON batching| graph[(Microsoft Graph v1.0<br/>+ one beta query)]
+  app -->|Managed identity<br/>fixed queries, JSON batching| msgraph[(Microsoft Graph v1.0<br/>+ one beta query)]
   app -->|Key Vault reference| kv[(Key Vault<br/>hibp-api-key)]
   app -->|API key| hibp[(Have I Been Pwned v3)]
   app --> ai[(Application Insights)]
