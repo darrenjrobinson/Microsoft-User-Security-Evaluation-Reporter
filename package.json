@@ -21,7 +21,7 @@
     "sync:atlas": "node scripts/sync-graph-atlas.mjs"
   },
   "dependencies": {
-    "@azure/identity": "^4.14.0",
+    "@azure/identity": "^4.14.1",
     "applicationinsights": "^3.17.0",
     "bootstrap": "^5.3.8",
     "bootstrap-icons": "^1.13.2",
