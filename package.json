@@ -36,12 +36,12 @@
     "@types/express": "^5.0.6",
     "@types/node": "^24.19.2",
     "@types/supertest": "^7.2.1",
-    "eslint": "^10.13.0",
-    "globals": "^17.13.0",
+    "eslint": "^10.14.0",
+    "globals": "^17.14.0",
     "supertest": "^7.3.1",
     "tsx": "^4.23.15",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.72.0",
-    "vitest": "^5.0.5"
+    "typescript-eslint": "^8.72.1",
+    "vitest": "^5.1.0"
   }
 }
